@@ -1,4 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  lazy,
+  Suspense,
+} from "react";
+import {
+  motion,
+  useScroll,
+  useTransform,
+  AnimatePresence,
+} from "framer-motion";
 import {
   Menu,
   X,
@@ -6,213 +19,650 @@ import {
   Volume2,
   VolumeX,
   ChevronDown,
+  MapPin as MapPinIcon,
+  Navigation,
 } from "lucide-react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import Lenis from "lenis";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment } from "@react-three/drei";
-
+import { useInView } from "react-intersection-observer";
+import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 import heroVideo from "./assets/hero.mp4";
 
-
-// Register GSAP ScrollTrigger
-gsap.registerPlugin(ScrollTrigger);
-
-// ---------- 3D Car Component ----------
+// ============ CAR MODEL (inline) ============
 function CarModel() {
   const { scene } = useGLTF("/models/scene.gltf");
   return <primitive object={scene} scale={0.8} />;
 }
 
-function ThreeScene() {
+// ============ CUSTOM HOOKS ============
+const useMediaQuery = (query) => {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    if (media.matches !== matches) {
+      setMatches(media.matches);
+    }
+    const listener = (e) => setMatches(e.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, [matches, query]);
+
+  return matches;
+};
+
+const useDarkMode = () => {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("theme");
+      return saved
+        ? saved === "dark"
+        : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDark]);
+
+  return [isDark, setIsDark];
+};
+
+// ============ 3D SCENE COMPONENT ============
+const ThreeScene = ({ scrollY }) => {
+  const { ref, inView } = useInView({
+    threshold: 0.1,
+    triggerOnce: true,
+  });
+
+  const rotation = useTransform(scrollY, [0, 1000], [0, Math.PI * 2]);
+
   return (
-    <div className="h-[400px] w-full md:h-[500px]">
-      <Canvas camera={{ position: [0, 1, 5], fov: 45 }}>
-        <ambientLight intensity={0.5} />
-        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} />
-        <Environment preset="city" />
-        <CarModel />
-        <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={2} />
-      </Canvas>
+    <div ref={ref} className="h-[400px] w-full md:h-[500px] relative">
+      <AnimatePresence>
+        {inView && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0"
+          >
+            <Suspense
+              fallback={
+                <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black animate-pulse" />
+              }
+            >
+              <Canvas camera={{ position: [0, 1, 5], fov: 45 }}>
+                <ambientLight intensity={0.5} />
+                <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} />
+                <Environment preset="city" />
+                <motion.group rotation={rotation}>
+                  <CarModel />
+                </motion.group>
+                <OrbitControls
+                  enableZoom={false}
+                  autoRotate
+                  autoRotateSpeed={2}
+                />
+              </Canvas>
+            </Suspense>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
-}
+};
 
-// ---------- FAQ Accordion Item ----------
+// ============ FARE ESTIMATOR ============
+const FareEstimator = ({ pickup, dropoff, distance }) => {
+  const [estimatedFare, setEstimatedFare] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const calculateFare = useCallback(async () => {
+    if (!pickup || !dropoff) return;
+
+    setLoading(true);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const baseFare = 5;
+    const perMile = 2.5;
+    const timeOfDay = new Date().getHours();
+    const surgeMultiplier = timeOfDay >= 22 || timeOfDay <= 6 ? 1.5 : 1;
+
+    const fare = (baseFare + distance * perMile) * surgeMultiplier;
+    setEstimatedFare(Math.round(fare * 100) / 100);
+    setLoading(false);
+  }, [pickup, dropoff, distance]);
+
+  useEffect(() => {
+    calculateFare();
+  }, [calculateFare]);
+
+  return (
+    <div className="mt-4 p-4 bg-white/5 rounded-xl backdrop-blur-sm border border-white/10">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-white/50">Estimated Fare</span>
+        {loading ? (
+          <div className="w-20 h-6 bg-white/10 animate-pulse rounded" />
+        ) : (
+          <span className="text-2xl font-semibold text-white">
+            £{estimatedFare || "—"}
+          </span>
+        )}
+      </div>
+      <div className="mt-2 text-xs text-white/40">
+        *Includes base fare, distance, and time-based surcharges
+      </div>
+    </div>
+  );
+};
+
+// ============ GOOGLE MAPS AUTOCOMPLETE ============
+const LocationAutocomplete = ({ value, onChange, placeholder, label }) => {
+  const [predictions, setPredictions] = useState([]);
+  const [isFocused, setIsFocused] = useState(false);
+  const autocompleteService = useRef(null);
+  const placesService = useRef(null);
+
+  useEffect(() => {
+    setOptions({
+      key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+      libraries: ["places"],
+    });
+
+    const loadPlaces = async () => {
+      try {
+        const places = await importLibrary("places");
+        autocompleteService.current = new places.AutocompleteService();
+        placesService.current = new places.PlacesService(
+          document.createElement("div"),
+        );
+      } catch (error) {
+        console.error("Failed to load Google Maps Places library", error);
+      }
+    };
+    loadPlaces();
+  }, []);
+
+  const handleInput = (e) => {
+    const value = e.target.value;
+    onChange(value);
+
+    if (value.length > 2 && autocompleteService.current) {
+      autocompleteService.current.getPlacePredictions(
+        {
+          input: value,
+          types: ["geocode", "establishment"],
+          componentRestrictions: { country: "uk" },
+        },
+        (results, status) => {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+            setPredictions(results);
+          }
+        },
+      );
+    } else {
+      setPredictions([]);
+    }
+  };
+
+  const handleSelect = (prediction) => {
+    onChange(prediction.description);
+    setPredictions([]);
+    setIsFocused(false);
+  };
+
+  return (
+    <div className="relative">
+      <label className="block text-sm font-medium text-white/70 mb-1">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          onChange={handleInput}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+          placeholder={placeholder}
+          className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors"
+        />
+        <MapPinIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+      </div>
+      <AnimatePresence>
+        {isFocused && predictions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute z-50 w-full mt-1 bg-black/95 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl"
+          >
+            {predictions.map((prediction) => (
+              <button
+                key={prediction.place_id}
+                onClick={() => handleSelect(prediction)}
+                className="w-full px-4 py-3 text-left text-white/80 hover:bg-white/5 transition-colors flex items-center gap-2"
+              >
+                <Navigation className="w-4 h-4 text-white/30" />
+                <span className="text-sm">{prediction.description}</span>
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ============ BOOKING FORM ============
+const BookingForm = ({ isOpen, onClose }) => {
+  const [tripType, setTripType] = useState("one-way");
+  const [pickup, setPickup] = useState("");
+  const [dropoff, setDropoff] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [passengers, setPassengers] = useState(1);
+  const [distance, setDistance] = useState(0);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+
+  // Load Google Maps libraries
+  useEffect(() => {
+    setOptions({
+      key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+      libraries: ["places", "distance_matrix"],
+    });
+
+    const loadMaps = async () => {
+      try {
+        await importLibrary("places");
+        await importLibrary("distance_matrix");
+        setMapsLoaded(true);
+      } catch (error) {
+        console.error("Failed to load Google Maps libraries", error);
+      }
+    };
+    loadMaps();
+  }, []);
+
+  const handleDistanceCalculation = useCallback(() => {
+    if (!mapsLoaded || !pickup || !dropoff) return;
+
+    const service = new window.google.maps.DistanceMatrixService();
+    service.getDistanceMatrix(
+      {
+        origins: [pickup],
+        destinations: [dropoff],
+        travelMode: "DRIVING",
+        unitSystem: window.google.maps.UnitSystem.IMPERIAL,
+      },
+      (response, status) => {
+        if (status === "OK") {
+          const distanceInMiles =
+            response.rows[0].elements[0].distance.value / 1609.34;
+          setDistance(distanceInMiles);
+        }
+      },
+    );
+  }, [pickup, dropoff, mapsLoaded]);
+
+  useEffect(() => {
+    const timer = setTimeout(handleDistanceCalculation, 500);
+    return () => clearTimeout(timer);
+  }, [handleDistanceCalculation]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    console.log({ tripType, pickup, dropoff, date, time, passengers });
+    onClose();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 50 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 50 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-xl"
+        onClick={onClose}
+      />
+
+      <motion.div
+        initial={{ scale: 0.9 }}
+        animate={{ scale: 1 }}
+        className="relative w-full max-w-2xl bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
+      >
+        <div className="p-6 border-b border-white/10 flex items-center justify-between">
+          <h2 className="text-2xl font-semibold text-white">Book Your Ride</h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-white/5 transition-colors text-white/50"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6">
+          {/* Progress Indicator */}
+          <div className="flex gap-2 mb-6">
+            {[1, 2, 3].map((step) => (
+              <div
+                key={step}
+                className={`flex-1 h-1 rounded-full transition-colors ${
+                  step <= currentStep ? "bg-white" : "bg-white/10"
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Step 1: Trip Details */}
+          {currentStep === 1 && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-2">
+                  Trip Type
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {["one-way", "return", "airport"].map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setTripType(type)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        tripType === type
+                          ? "bg-white text-black"
+                          : "bg-white/5 text-white/70 hover:bg-white/10"
+                      }`}
+                    >
+                      {type === "one-way" && "One Way"}
+                      {type === "return" && "Return"}
+                      {type === "airport" && "Airport"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <LocationAutocomplete
+                value={pickup}
+                onChange={setPickup}
+                placeholder="Enter pickup location"
+                label="Pickup Location"
+              />
+
+              <LocationAutocomplete
+                value={dropoff}
+                onChange={setDropoff}
+                placeholder="Enter dropoff location"
+                label="Dropoff Location"
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-white/70 mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white focus:outline-none focus:border-white/50 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white/70 mb-1">
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white focus:outline-none focus:border-white/50 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Passengers
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="8"
+                  value={passengers}
+                  onChange={(e) => setPassengers(parseInt(e.target.value))}
+                  className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white focus:outline-none focus:border-white/50 transition-colors"
+                />
+              </div>
+
+              <FareEstimator
+                pickup={pickup}
+                dropoff={dropoff}
+                distance={distance}
+              />
+            </motion.div>
+          )}
+
+          {/* Step 2: Vehicle Selection */}
+          {currentStep === 2 && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-4"
+            >
+              <h3 className="text-lg font-medium text-white">
+                Select Your Vehicle
+              </h3>
+              <div className="grid gap-3">
+                {[
+                  {
+                    name: "Business Sedan",
+                    price: 45,
+                    capacity: 3,
+                    features: ["WiFi", "Water"],
+                  },
+                  {
+                    name: "Executive SUV",
+                    price: 75,
+                    capacity: 6,
+                    features: ["Leather", "Refreshments"],
+                  },
+                  {
+                    name: "Limousine",
+                    price: 120,
+                    capacity: 8,
+                    features: ["VIP", "Champagne"],
+                  },
+                ].map((vehicle) => (
+                  <motion.div
+                    key={vehicle.name}
+                    whileHover={{ scale: 1.02 }}
+                    className="p-4 bg-white/5 rounded-xl border border-white/10 cursor-pointer hover:border-white/30 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-white font-medium">
+                          {vehicle.name}
+                        </h4>
+                        <p className="text-white/50 text-sm">
+                          Up to {vehicle.capacity} passengers
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-white font-semibold">
+                          £{vehicle.price}
+                        </p>
+                        <p className="text-white/40 text-xs">per ride</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 3: Passenger Details */}
+          {currentStep === 3 && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-4"
+            >
+              <h3 className="text-lg font-medium text-white">
+                Passenger Details
+              </h3>
+
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors"
+                  placeholder="John Doe"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors"
+                  placeholder="john@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors"
+                  placeholder="+44 20 1234 5678"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Special Requests
+                </label>
+                <textarea
+                  className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors resize-none h-20"
+                  placeholder="Any special requirements?"
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div className="mt-6 flex gap-3">
+            {currentStep > 1 && (
+              <button
+                type="button"
+                onClick={() => setCurrentStep(currentStep - 1)}
+                className="flex-1 px-6 py-3 rounded-xl border border-white/20 text-white hover:bg-white/5 transition-colors"
+              >
+                Back
+              </button>
+            )}
+            {currentStep < 3 ? (
+              <button
+                type="button"
+                onClick={() => setCurrentStep(currentStep + 1)}
+                className="flex-1 px-6 py-3 rounded-xl bg-white text-black font-medium hover:bg-gray-200 transition-colors"
+              >
+                Continue
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="flex-1 px-6 py-3 rounded-xl bg-white text-black font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+              >
+                Confirm Booking
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// ============ FAQ ITEM ============
 function FAQItem({ question, answer, isOpen, toggle }) {
   return (
-    <div className="border-b border-white/10">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="border-b border-white/10"
+    >
       <button
         onClick={toggle}
         className="w-full py-6 flex items-center justify-between text-left text-white hover:text-white/80 transition-colors"
       >
         <span className="text-lg font-medium">{question}</span>
-        <ChevronDown
-          className={`w-5 h-5 transition-transform duration-300 ${
-            isOpen ? "rotate-180" : ""
-          }`}
-        />
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <ChevronDown className="w-5 h-5" />
+        </motion.div>
       </button>
-      <div
-        className={`overflow-hidden transition-all duration-300 ${
-          isOpen ? "max-h-40 pb-6" : "max-h-0"
-        }`}
-      >
-        <p className="text-white/70 leading-relaxed">{answer}</p>
-      </div>
-    </div>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <p className="text-white/70 leading-relaxed pb-6">{answer}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
-// ---------- Main App ----------
+// ============ MAIN APP ============
 export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
-  const [faqOpen, setFaqOpen] = useState(null); // index of open FAQ
+  const [isDark, setIsDark] = useDarkMode();
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [faqOpen, setFaqOpen] = useState(null);
 
-  // Refs for sections (used in GSAP animations)
+  // Use framer-motion's useScroll
+  const { scrollY } = useScroll();
+
   const heroRef = useRef(null);
-  const storyRef = useRef(null);
-  const ratesRef = useRef(null);
-  const benefitsRef = useRef(null);
-  const faqRef = useRef(null);
-  const footerRef = useRef(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
 
-  // Refs for hero elements (already in your code)
-  const labelRef = useRef(null);
-  const heading1Ref = useRef(null);
-  const heading2Ref = useRef(null);
-  const subtitleRef = useRef(null);
-  const buttonsRef = useRef(null);
-  const statsRef = useRef(null);
-  const videoRef = useRef(null);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
+  const heroScale = useTransform(scrollYProgress, [0, 0.5], [1, 1.1]);
 
-  useEffect(() => {
-    // 1. Lenis smooth scroll
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-      wheelMultiplier: 1,
-      touchMultiplier: 2,
-    });
-
-    function raf(time) {
-      lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
-    requestAnimationFrame(raf);
-
-    // 2. Hero entrance animations (existing)
-    const heroTl = gsap.timeline({ defaults: { ease: "power3.out" } });
-    heroTl
-      .fromTo(
-        labelRef.current,
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, duration: 0.8 },
-      )
-      .fromTo(
-        heading1Ref.current,
-        { opacity: 0, y: 40 },
-        { opacity: 1, y: 0, duration: 0.9 },
-        "-=0.5",
-      )
-      .fromTo(
-        heading2Ref.current,
-        { opacity: 0, y: 40 },
-        { opacity: 1, y: 0, duration: 0.9 },
-        "-=0.6",
-      )
-      .fromTo(
-        subtitleRef.current,
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, duration: 0.8 },
-        "-=0.4",
-      )
-      .fromTo(
-        buttonsRef.current,
-        { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, duration: 0.7 },
-        "-=0.3",
-      )
-      .fromTo(
-        statsRef.current,
-        { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, duration: 0.7 },
-        "-=0.2",
-      );
-
-    // 3. Video slow zoom
-    gsap.to(videoRef.current, {
-      scale: 1.1,
-      duration: 20,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
-
-    // 4. Scroll‑triggered animations for other sections
-    const sections = [
-      { ref: storyRef, id: "story" },
-      { ref: ratesRef, id: "rates" },
-      { ref: benefitsRef, id: "benefits" },
-      { ref: faqRef, id: "faq" },
-      { ref: footerRef, id: "footer" },
-    ];
-
-    sections.forEach(({ ref }) => {
-      if (ref.current) {
-        gsap.fromTo(
-          ref.current,
-          { opacity: 0, y: 50 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 1,
-            ease: "power3.out",
-            scrollTrigger: {
-              trigger: ref.current,
-              start: "top 80%",
-              toggleActions: "play none none none",
-            },
-          },
-        );
-      }
-    });
-
-    // 5. Story section: 3D scene entrance (optional)
-    if (storyRef.current) {
-      gsap.fromTo(
-        storyRef.current.querySelector(".story-3d"),
-        { opacity: 0, scale: 0.9 },
-        {
-          opacity: 1,
-          scale: 1,
-          duration: 1.2,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: storyRef.current,
-            start: "top 75%",
-          },
-        },
-      );
-    }
-
-    // Cleanup
-    return () => {
-      lenis.destroy();
-      heroTl.kill();
-      ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
-    };
-  }, []);
-
-  // FAQ toggle handler
-  const toggleFAQ = (index) => {
-    setFaqOpen(faqOpen === index ? null : index);
-  };
-
-  // FAQ data
   const faqs = [
     {
       question: "How do I book a ride?",
@@ -236,18 +686,35 @@ export default function App() {
     },
   ];
 
+  const toggleFAQ = (index) => {
+    setFaqOpen(faqOpen === index ? null : index);
+  };
+
   return (
-    <>
+    <div className={`min-h-screen ${isDark ? "dark" : ""}`}>
       <style>
         {`
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
           * { font-family: 'Inter', sans-serif; }
-          html { scroll-behavior: smooth; }
-          body { background: #000; color: #fff; }
+          body { background: #000; color: #fff; margin: 0; overflow-x: hidden; }
+          ::-webkit-scrollbar { width: 8px; }
+          ::-webkit-scrollbar-track { background: #000; }
+          ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+          ::-webkit-scrollbar-thumb:hover { background: #444; }
+          .dark body { background: #000; }
         `}
       </style>
 
-      {/* Global Floating Sound Toggle – bottom right */}
+      {/* ========== THEME TOGGLE ========== */}
+      <button
+        onClick={() => setIsDark(!isDark)}
+        className="fixed bottom-8 left-8 z-50 p-3 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-all duration-300 shadow-lg hover:scale-110"
+        aria-label="Toggle theme"
+      >
+        {isDark ? "☀️" : "🌙"}
+      </button>
+
+      {/* ========== SOUND TOGGLE ========== */}
       <button
         onClick={() => setIsMuted(!isMuted)}
         className="fixed bottom-8 right-8 z-50 p-3 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-all duration-300 shadow-lg hover:scale-110"
@@ -260,30 +727,54 @@ export default function App() {
         )}
       </button>
 
+      {/* ========== BOOKING MODAL ========== */}
+      <AnimatePresence>
+        {bookingOpen && (
+          <BookingForm
+            isOpen={bookingOpen}
+            onClose={() => setBookingOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ========== HERO SECTION ========== */}
       <section ref={heroRef} className="relative h-screen overflow-hidden">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted={isMuted}
-          loop
-          playsInline
-          className="absolute inset-0 h-full w-full object-cover"
+        <motion.div
+          style={{ opacity: heroOpacity, scale: heroScale }}
+          className="absolute inset-0"
         >
-          <source src={heroVideo} type="video/mp4" />
-        </video>
+          <video
+            autoPlay
+            muted={isMuted}
+            loop
+            playsInline
+            className="h-full w-full object-cover"
+          >
+            <source src={heroVideo} type="video/mp4" />
+          </video>
+        </motion.div>
 
         <div className="absolute inset-0 bg-black/45" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/60" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[700px] bg-white/10 blur-3xl rounded-full" />
 
         <div className="relative z-20 h-full flex flex-col">
-          <header className="w-full">
+          {/* HEADER */}
+          <motion.header
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="w-full"
+          >
             <div className="max-w-7xl mx-auto px-8 py-7 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full border border-white/30 flex items-center justify-center backdrop-blur-md bg-white/10">
+                <motion.div
+                  whileHover={{ rotate: 360 }}
+                  transition={{ duration: 0.5 }}
+                  className="w-10 h-10 rounded-full border border-white/30 flex items-center justify-center backdrop-blur-md bg-white/10"
+                >
                   <span className="text-white font-semibold text-sm">WC</span>
-                </div>
+                </motion.div>
                 <h1 className="text-2xl font-semibold tracking-wide text-white">
                   Western Cars
                 </h1>
@@ -291,20 +782,26 @@ export default function App() {
 
               <nav className="hidden md:flex items-center gap-10">
                 {["Story", "Rates", "Benefits", "FAQ"].map((item) => (
-                  <a
+                  <motion.a
                     key={item}
                     href={`#${item.toLowerCase()}`}
+                    whileHover={{ y: -2 }}
                     className="text-white/90 hover:text-white transition-colors text-sm tracking-wide font-medium"
                   >
                     {item}
-                  </a>
+                  </motion.a>
                 ))}
               </nav>
 
               <div className="hidden md:flex items-center gap-4">
-                <button className="px-5 py-2.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors text-sm font-medium">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setBookingOpen(true)}
+                  className="px-5 py-2.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors text-sm font-medium"
+                >
                   Reserve Ride
-                </button>
+                </motion.button>
               </div>
 
               <button
@@ -319,105 +816,152 @@ export default function App() {
               </button>
             </div>
 
-            {mobileMenuOpen && (
-              <div className="md:hidden px-6">
-                <div className="bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 shadow-2xl">
-                  <nav className="flex flex-col gap-6">
-                    {["Story", "Rates", "Benefits", "FAQ"].map((item) => (
-                      <a
-                        key={item}
-                        href={`#${item.toLowerCase()}`}
-                        className="text-white/90 hover:text-white transition-colors text-lg"
+            <AnimatePresence>
+              {mobileMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="md:hidden px-6"
+                >
+                  <div className="bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 shadow-2xl">
+                    <nav className="flex flex-col gap-6">
+                      {["Story", "Rates", "Benefits", "FAQ"].map((item) => (
+                        <a
+                          key={item}
+                          href={`#${item.toLowerCase()}`}
+                          className="text-white/90 hover:text-white transition-colors text-lg"
+                        >
+                          {item}
+                        </a>
+                      ))}
+                      <button
+                        onClick={() => {
+                          setBookingOpen(true);
+                          setMobileMenuOpen(false);
+                        }}
+                        className="mt-2 px-5 py-3 rounded-full bg-white text-black font-medium hover:bg-gray-200 transition-colors"
                       >
-                        {item}
-                      </a>
-                    ))}
-                    <button className="mt-2 px-5 py-3 rounded-full bg-white text-black font-medium hover:bg-gray-200 transition-colors">
-                      Reserve Ride
-                    </button>
-                  </nav>
-                </div>
-              </div>
-            )}
-          </header>
+                        Reserve Ride
+                      </button>
+                    </nav>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.header>
 
+          {/* HERO CONTENT */}
           <main className="flex-1 flex items-center justify-center">
             <div className="max-w-6xl mx-auto px-6 text-center -mt-24">
-              <div
-                ref={labelRef}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/10 backdrop-blur-md mb-8"
               >
                 <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 <span className="text-xs tracking-[0.25em] uppercase text-white/80 font-semibold">
                   Private Taxi Hire
                 </span>
-              </div>
+              </motion.div>
 
               <div className="space-y-0 leading-none tracking-[-0.06em]">
-                <h1
-                  ref={heading1Ref}
+                <motion.h1
+                  initial={{ opacity: 0, y: 40 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
                   className="text-6xl sm:text-7xl md:text-8xl lg:text-[9rem] font-medium text-white/70"
                 >
                   Premium.
-                </h1>
-                <h1
-                  ref={heading2Ref}
+                </motion.h1>
+                <motion.h1
+                  initial={{ opacity: 0, y: 40 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
                   className="text-6xl sm:text-7xl md:text-8xl lg:text-[9rem] font-medium text-white -mt-5 md:-mt-8"
                 >
                   Accessible.
-                </h1>
+                </motion.h1>
               </div>
 
-              <p
-                ref={subtitleRef}
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
                 className="mt-8 text-lg md:text-xl text-white/75 max-w-2xl mx-auto leading-relaxed"
               >
                 Luxury airport transfers and executive private travel designed
                 for comfort, elegance, and seamless journeys.
-              </p>
+              </motion.p>
 
-              <div
-                ref={buttonsRef}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
                 className="mt-10 flex flex-wrap items-center justify-center gap-4"
               >
-                <button className="group px-7 py-3.5 rounded-full bg-white text-black font-medium hover:bg-gray-200 transition-colors flex items-center gap-2 shadow-2xl hover:scale-105 transition-transform">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="group px-7 py-3.5 rounded-full bg-white text-black font-medium hover:bg-gray-200 transition-colors flex items-center gap-2 shadow-2xl"
+                >
                   Discover
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                </button>
-                <button className="px-7 py-3.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors font-medium hover:scale-105 transition-transform">
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setBookingOpen(true)}
+                  className="px-7 py-3.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors font-medium"
+                >
                   Book Now
-                </button>
-              </div>
+                </motion.button>
+              </motion.div>
 
-              <div
-                ref={statsRef}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
                 className="mt-20 flex flex-wrap items-center justify-center gap-10 text-white/70"
               >
-                <div>
+                <motion.div whileHover={{ scale: 1.1 }}>
                   <h3 className="text-2xl font-semibold text-white">24/7</h3>
                   <p className="text-sm mt-1">Luxury Service</p>
-                </div>
+                </motion.div>
                 <div className="w-px h-10 bg-white/20 hidden sm:block" />
-                <div>
+                <motion.div whileHover={{ scale: 1.1 }}>
                   <h3 className="text-2xl font-semibold text-white">500+</h3>
                   <p className="text-sm mt-1">Premium Transfers</p>
-                </div>
+                </motion.div>
                 <div className="w-px h-10 bg-white/20 hidden sm:block" />
-                <div>
+                <motion.div whileHover={{ scale: 1.1 }}>
                   <h3 className="text-2xl font-semibold text-white">VIP</h3>
                   <p className="text-sm mt-1">Executive Experience</p>
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
             </div>
           </main>
         </div>
       </section>
 
       {/* ========== STORY SECTION ========== */}
-      <section id="story" ref={storyRef} className="py-24 bg-black/95">
+      <motion.section
+        id="story"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 1 }}
+        className="py-24 bg-black/95"
+      >
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div>
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+            >
               <span className="text-sm tracking-[0.2em] uppercase text-white/50 mb-4 block">
                 Our Story
               </span>
@@ -433,19 +977,31 @@ export default function App() {
               <p className="text-white/70 text-lg leading-relaxed">
                 Our fleet is meticulously maintained, our chauffeurs are
                 professionally trained, and every ride is tailored to your
-                needs. Whether it’s a quick airport transfer or a full day of
+                needs. Whether it's a quick airport transfer or a full day of
                 executive travel, we deliver a seamless experience.
               </p>
-            </div>
-            <div className="story-3d">
-              <ThreeScene />
-            </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+            >
+              <ThreeScene scrollY={scrollY} />
+            </motion.div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ========== RATES SECTION ========== */}
-      <section id="rates" ref={ratesRef} className="py-24 bg-black">
+      <motion.section
+        id="rates"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 1 }}
+        className="py-24 bg-black"
+      >
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
             <span className="text-sm tracking-[0.2em] uppercase text-white/50">
@@ -488,9 +1044,14 @@ export default function App() {
                 ],
               },
             ].map((plan, idx) => (
-              <div
+              <motion.div
                 key={idx}
-                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-3xl p-8 hover:scale-105 transition-transform duration-300"
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.1, duration: 0.6 }}
+                whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
+                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-3xl p-8"
               >
                 <h3 className="text-xl font-semibold text-white">
                   {plan.name}
@@ -501,23 +1062,42 @@ export default function App() {
                 </p>
                 <ul className="mt-6 space-y-3 text-white/70">
                   {plan.features.map((feat, i) => (
-                    <li key={i} className="flex items-center gap-2">
+                    <motion.li
+                      key={i}
+                      initial={{ opacity: 0, x: -20 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.05 }}
+                      className="flex items-center gap-2"
+                    >
                       <span className="w-1.5 h-1.5 rounded-full bg-white/50" />
                       {feat}
-                    </li>
+                    </motion.li>
                   ))}
                 </ul>
-                <button className="mt-8 w-full py-3 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setBookingOpen(true)}
+                  className="mt-8 w-full py-3 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors"
+                >
                   Select
-                </button>
-              </div>
+                </motion.button>
+              </motion.div>
             ))}
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ========== BENEFITS SECTION ========== */}
-      <section id="benefits" ref={benefitsRef} className="py-24 bg-black/95">
+      <motion.section
+        id="benefits"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 1 }}
+        className="py-24 bg-black/95"
+      >
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
             <span className="text-sm tracking-[0.2em] uppercase text-white/50">
@@ -550,23 +1130,35 @@ export default function App() {
                 desc: "Tailored to your preferences.",
               },
             ].map((benefit, idx) => (
-              <div
+              <motion.div
                 key={idx}
-                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-center hover:scale-105 transition-transform duration-300"
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.1, duration: 0.6 }}
+                whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
+                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-center"
               >
                 <div className="text-4xl mb-4">{benefit.icon}</div>
                 <h3 className="text-lg font-semibold text-white mb-2">
                   {benefit.title}
                 </h3>
                 <p className="text-white/70 text-sm">{benefit.desc}</p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ========== FAQ SECTION ========== */}
-      <section id="faq" ref={faqRef} className="py-24 bg-black">
+      <motion.section
+        id="faq"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 1 }}
+        className="py-24 bg-black"
+      >
         <div className="max-w-3xl mx-auto px-6">
           <div className="text-center mb-12">
             <span className="text-sm tracking-[0.2em] uppercase text-white/50">
@@ -588,15 +1180,23 @@ export default function App() {
             ))}
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ========== FOOTER ========== */}
-      <footer
-        ref={footerRef}
+      <motion.footer
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 1 }}
         className="py-16 bg-black/95 border-t border-white/10"
       >
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div>
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+          >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full border border-white/30 flex items-center justify-center bg-white/10">
                 <span className="text-white font-semibold text-sm">WC</span>
@@ -608,8 +1208,13 @@ export default function App() {
             <p className="text-white/50 text-sm">
               Luxury rides, delivered with care.
             </p>
-          </div>
-          <div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1, duration: 0.8 }}
+          >
             <h4 className="text-white font-medium mb-4">Quick Links</h4>
             <ul className="space-y-2 text-white/50 text-sm">
               <li>
@@ -636,16 +1241,26 @@ export default function App() {
                 </a>
               </li>
             </ul>
-          </div>
-          <div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.2, duration: 0.8 }}
+          >
             <h4 className="text-white font-medium mb-4">Contact</h4>
             <ul className="space-y-2 text-white/50 text-sm">
               <li>hello@westerncars.com</li>
               <li>+44 20 1234 5678</li>
               <li>London, UK</li>
             </ul>
-          </div>
-          <div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3, duration: 0.8 }}
+          >
             <h4 className="text-white font-medium mb-4">Follow Us</h4>
             <div className="flex gap-4">
               <a
@@ -661,12 +1276,12 @@ export default function App() {
                 Twitter
               </a>
             </div>
-          </div>
+          </motion.div>
         </div>
         <div className="max-w-7xl mx-auto px-6 mt-8 pt-8 border-t border-white/10 text-center text-white/40 text-sm">
           &copy; 2026 Western Cars. All rights reserved.
         </div>
-      </footer>
-    </>
+      </motion.footer>
+    </div>
   );
 }
