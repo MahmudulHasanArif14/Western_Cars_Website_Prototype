@@ -2,7 +2,7 @@
 
 import { useLoader } from "@react-three/fiber";
 
-import { GLTFLoader } from "../../node_modules/three/examples/jsm/loaders/GLTFLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 // @ts-ignore
 const car = "/models/scene.gltf";
