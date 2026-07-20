@@ -59,20 +59,20 @@ export default function Hero({ setBookingOpen }: HeroProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/10 backdrop-blur-md mb-8"
+              className="inline-flex items-center gap-2  px-4 py-2 rounded-full border border-white/15 bg-white/10 backdrop-blur-md md:mb-8"
             >
-              <div className="w-2 h-2 rounded-full bg-green-800 animate-pulse" />
-              <span className="text-xs tracking-[0.25em] uppercase text-white/80 font-semibold">
+              <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+              <span className="text-xs tracking-[0.25em] uppercase text-white/90 font-semibold">
                 Private Taxi Hire
               </span>
             </motion.div>
 
-            <div className="space-y-0 leading-none tracking-[-0.06em]">
+            <div className="space-y-5 md:space-y-0 leading-none tracking-[-0.06em]">
               <motion.h1
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="text-6xl sm:text-7xl md:text-8xl lg:text-[9rem] font-medium text-white/70"
+                className="text-5xl sm:text-7xl md:text-8xl lg:text-[9rem] font-medium text-white/70"
               >
                 Premium.
               </motion.h1>
@@ -80,7 +80,7 @@ export default function Hero({ setBookingOpen }: HeroProps) {
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
-                className="text-6xl sm:text-7xl md:text-8xl lg:text-[9rem] font-medium text-white -mt-5 md:-mt-8"
+                className="text-5xl sm:text-7xl md:text-8xl lg:text-[9rem] font-medium text-white -mt-5 md:-mt-8"
               >
                 Accessible.
               </motion.h1>
@@ -90,7 +90,7 @@ export default function Hero({ setBookingOpen }: HeroProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="mt-8 text-lg md:text-xl text-white/75 max-w-2xl mx-auto leading-relaxed"
+              className="mt-14 md:mt-8 text-lg md:text-xl text-white/75 max-w-2xl mx-auto leading-relaxed"
             >
               Luxury airport transfers and executive private travel designed for
               comfort, elegance, and seamless journeys.
@@ -114,7 +114,13 @@ export default function Hero({ setBookingOpen }: HeroProps) {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setBookingOpen(true)}
-                className="px-7 py-3.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors font-medium"
+                className="px-7 py-3.5 rounded-full border border-white/20    bg-linear-to-br
+    from-[#3B82F6]
+    to-[#2563EB] 
+    shadow-[0_10px_30px_rgba(37,99,235,0.35)]
+   
+    
+    backdrop-blur-md text-white  hover:shadow-lg hover:bg-white/20 transition-colors font-medium"
               >
                 Book Now
               </motion.button>
