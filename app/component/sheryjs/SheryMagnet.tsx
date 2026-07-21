@@ -9,25 +9,24 @@ declare global {
 }
 
 export default function SheryMagnet() {
-    useEffect(() => {
-      console.log("Shery:", window.Shery);
-    const init = () => {
-        if (!window.Shery) return;
-         console.log("Shery:", window.Shery);
+  useEffect(() => {
+    const media = window.matchMedia("(hover: hover) and (pointer: fine)");
 
-        window.Shery.makeMagnet("a", {});
-        window.Shery.makeMagnet(".magnet", {});
+    // Don't initialize on touch devices
+    if (!media.matches) return;
+
+    const init = () => {
+      if (!window.Shery) return;
+
+      window.Shery.makeMagnet("a", {});
       window.Shery.mouseFollower();
     };
 
-    // If already loaded
     if (window.Shery) {
       init();
-      return;
+    } else {
+      window.addEventListener("shery-loaded", init);
     }
-
-    // Wait until the script finishes loading
-    window.addEventListener("shery-loaded", init);
 
     return () => {
       window.removeEventListener("shery-loaded", init);

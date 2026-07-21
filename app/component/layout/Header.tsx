@@ -48,7 +48,7 @@ const scrollTo = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
 };
 
 export default function Header({ setBookingOpen }: HeaderProps) {
- const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("home");
 
@@ -159,7 +159,10 @@ export default function Header({ setBookingOpen }: HeaderProps) {
             onMouseEnter={() => setServicesOpen(true)}
             onMouseLeave={() => setServicesOpen(false)}
           >
-            <button className="flex items-center gap-1 text-white">
+            <button
+              onClick={() => setServicesOpen(!servicesOpen)}
+              className="flex items-center gap-1 text-white"
+            >
               Services <ChevronDown size={16} />
             </button>
             <AnimatePresence>
@@ -168,7 +171,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-10 left-1/2 -translate-x-1/2 w-155 h-auto rounded-2xl bg-white shadow-2xl p-8"
+                  className="absolute top-10 left-1/2 -translate-x-1/2 w-155 h-auto rounded-2xl bg-white/10 backdrop-blur-xl shadow-2xl p-8"
                 >
                   <div className="grid grid-cols-2 gap-10">
                     {servicesMenu.map((section) => (
@@ -179,7 +182,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                             <motion.a
                               key={link.label}
                               href={link.href}
-                              className="block text-gray-600 hover:text-orange-500"
+                              className="block text-white/90 hover:text-orange-500"
                             >
                               {link.label}
                             </motion.a>
@@ -239,7 +242,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
             onClick={() => setBookingOpen(true)}
             className="px-5 py-2.5 rounded-full border border-white/20 bg-orange-500 backdrop-blur-md text-white hover:bg-orange-600 transition"
           >
-            Reserve Ride
+            Sign In
           </motion.button>
         </div>
 
@@ -361,8 +364,6 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                     </motion.div>
                   </button>
 
-                
-
                   <AnimatePresence>
                     {servicesOpen && (
                       <motion.div
@@ -445,7 +446,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                   }}
                   className="mt-2 px-5 py-3 rounded-full bg-white text-black font-medium hover:bg-gray-200 transition"
                 >
-                  Reserve Ride
+                  Sign In
                 </button>
               </nav>
             </div>

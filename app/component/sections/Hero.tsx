@@ -24,7 +24,7 @@ export default function Hero({ setBookingOpen }: HeroProps) {
   return (
     <section
       ref={heroRef}
-      className="relative h-screen overflow-hidden"
+      className="relative h-screen overflow-hidden bg-black"
       id="home"
     >
       {/* video background */}
