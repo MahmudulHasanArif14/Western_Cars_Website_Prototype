@@ -13,7 +13,6 @@ interface HeroProps {
 export default function Hero({ setBookingOpen }: HeroProps) {
   const heroRef = useRef(null);
 
-
   const { scrollYProgress } = useScroll({
     target: heroRef,
     offset: ["start start", "end start"],
@@ -26,7 +25,7 @@ export default function Hero({ setBookingOpen }: HeroProps) {
     <section
       ref={heroRef}
       className="relative h-screen overflow-hidden"
-      id="Home"
+      id="home"
     >
       {/* video background */}
       <motion.div
@@ -138,7 +137,7 @@ export default function Hero({ setBookingOpen }: HeroProps) {
               </motion.div>
               <div className="w-px h-10 bg-white/20 hidden sm:block" />
               <motion.div whileHover={{ scale: 1.1 }}>
-                <h3 className="text-2xl font-semibold text-white">500+</h3>
+                <h3 className="text-2xl font-semibold text-white">1500+</h3>
                 <p className="text-sm mt-1">Premium Transfers</p>
               </motion.div>
               <div className="w-px h-10 bg-white/20 hidden sm:block" />

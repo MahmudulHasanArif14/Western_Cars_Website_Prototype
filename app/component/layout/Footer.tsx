@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 export default function Footer() {
   return (
@@ -19,8 +20,14 @@ export default function Footer() {
           transition={{ duration: 0.8 }}
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full border border-white/30 flex items-center justify-center bg-white/10">
-              <span className="text-white font-semibold text-sm">WC</span>
+            <div className="w-10 h-10 rounded-full border border-white/30 flex items-center justify-center bg-white/10 cursor-pointer">
+              <Image
+                src="/assets/footerlogo.png"
+                alt="Western Cars Logo"
+                width={50}
+                height={50}
+                priority
+              />
             </div>
             <h1 className="text-xl font-semibold tracking-wide text-white">
               Western Cars
@@ -71,9 +78,11 @@ export default function Footer() {
         >
           <h4 className="text-white font-medium mb-4">Contact</h4>
           <ul className="space-y-2 text-white/50 text-sm">
-            <li>hello@westerncars.com</li>
-            <li>+44 20 1234 5678</li>
-            <li>London, UK</li>
+            <li>info@westerncars.co.uk</li>
+            <li>01342 300000</li>
+            <li>
+              198 Haslett Ave E, Three Bridges, Crawley RH10 1LY, United Kingdom
+            </li>
           </ul>
         </motion.div>
         <motion.div
@@ -85,7 +94,7 @@ export default function Footer() {
           <h4 className="text-white font-medium mb-4">Follow Us</h4>
           <div className="flex gap-4">
             <a
-              href="#"
+              href="https://www.instagram.com/westerncarscrawley/"
               className="text-white/50 hover:text-white transition-colors"
             >
               Instagram
