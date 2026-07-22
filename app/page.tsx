@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import Header from "./component/layout/Header";
 import Footer from "./component/layout/Footer";
+import ClientReview from "./component/sections/ClientReviews"
 
 import Hero from "./component/sections/Hero";
 
@@ -28,6 +29,7 @@ export default function Home() {
         <Hero setBookingOpen={setBookingOpen} />
         <Story />
         <Rates setBookingOpen={setBookingOpen} />
+        <ClientReview/>
         <Benefits />
         <FAQ faqOpen={faqOpen} setFaqOpen={setFaqOpen} faqs={FAQData} />
         <Footer />
