@@ -1,17 +1,35 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useScroll, useTransform } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import Header from "../layout/Header";
+import { useTheme } from "next-themes";
 
 interface HeroProps {
   setBookingOpen: (value: boolean) => void;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  isMuted: boolean;
+  setIsMuted: (value: boolean) => void;
 }
 
-export default function Hero({ setBookingOpen }: HeroProps) {
+export default function Hero({
+  setBookingOpen,
+  videoRef,
+  isMuted,
+  setIsMuted,
+}: HeroProps) {
   const heroRef = useRef(null);
+  const [mounted, setMounted] = useState(false);
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const [isVideoError, setIsVideoError] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -21,33 +39,79 @@ export default function Hero({ setBookingOpen }: HeroProps) {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.5], [1, 1.1]);
 
+  // Theme-based styles - only use dark/light values if mounted
+  const overlayBg = mounted
+    ? isDark
+      ? "bg-black/50"
+      : "bg-black/40"
+    : "bg-black/40";
+  const gradientOverlay = mounted
+    ? isDark
+      ? "bg-gradient-to-b from-black/40 via-black/20 to-black/70"
+      : "bg-gradient-to-b from-black/30 via-black/10 to-black/60"
+    : "bg-gradient-to-b from-black/30 via-black/10 to-black/60";
+  const glowBg = mounted
+    ? isDark
+      ? "bg-white/5 blur-3xl"
+      : "bg-white/10 blur-3xl"
+    : "bg-white/10 blur-3xl";
+
+  // Handle video loading states
+  const handleVideoLoaded = () => {
+    setIsVideoLoaded(true);
+  };
+
+  const handleVideoError = () => {
+    setIsVideoError(true);
+    console.warn("Video failed to load, using fallback gradient");
+  };
+
+  // Use suppressHydrationWarning on elements that might differ
   return (
     <section
       ref={heroRef}
       className="relative h-screen overflow-hidden bg-black"
       id="home"
     >
-      {/* video background */}
+      {/* Video Background */}
       <motion.div
         style={{ opacity: heroOpacity, scale: heroScale }}
         className="absolute inset-0 overflow-hidden"
       >
+        {/* Loading placeholder */}
+        {!isVideoLoaded && !isVideoError && (
+          <div className="absolute inset-0 bg-linear-to-br from-gray-900 to-black animate-pulse" />
+        )}
+
+        {/* Fallback gradient if video fails */}
+        {isVideoError && (
+          <div className="absolute inset-0 bg-linear-to-br from-blue-900 via-black to-gray-900" />
+        )}
+
         <video
+          ref={videoRef}
           autoPlay
           muted
           loop
           playsInline
-          preload="metadata"
-          className="absolute inset-0 w-full max-h-full object-cover "
+          preload="auto"
+          onLoadedData={handleVideoLoaded}
+          onError={handleVideoError}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+            isVideoLoaded ? "opacity-100" : "opacity-0"
+          }`}
         >
           <source src="/assets/hero.webm" type="video/webm" />
           <source src="/assets/hero.mp4" type="video/mp4" />
         </video>
       </motion.div>
 
-      <div className="absolute inset-0 bg-black/45" />
-      <div className="absolute inset-0 bg-linear-to-b from-black/30 via-black/10 to-black/60" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-175 h-175 bg-white/10 blur-3xl rounded-full" />
+      {/* Overlays */}
+      <div className={`absolute inset-0 ${overlayBg}`} />
+      <div className={`absolute inset-0 ${gradientOverlay}`} />
+      <div
+        className={`absolute top-0 left-1/2 -translate-x-1/2 w-175 h-175 blur-3xl rounded-full ${glowBg}`}
+      />
 
       <div className="relative z-20 h-full flex flex-col">
         <Header setBookingOpen={setBookingOpen} />
@@ -58,7 +122,7 @@ export default function Hero({ setBookingOpen }: HeroProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="inline-flex items-center gap-2  px-4 py-2 rounded-full border border-white/15 bg-white/10 backdrop-blur-md md:mb-8"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/10 backdrop-blur-md md:mb-8"
             >
               <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
               <span className="text-xs tracking-[0.25em] uppercase text-white/90 font-semibold">
@@ -113,13 +177,7 @@ export default function Hero({ setBookingOpen }: HeroProps) {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setBookingOpen(true)}
-                className="px-7 py-3.5 rounded-full border border-white/20    bg-linear-to-br
-    from-[#3B82F6]
-    to-[#2563EB] 
-    shadow-[0_10px_30px_rgba(37,99,235,0.35)]
-   
-    
-    backdrop-blur-md text-white  hover:shadow-lg hover:bg-white/20 transition-colors font-medium"
+                className="px-7 py-3.5 rounded-full border border-white/20 bg-linear-to-br from-[#3B82F6] to-[#2563EB] shadow-[0_10px_30px_rgba(37,99,235,0.35)] backdrop-blur-md text-white hover:shadow-lg hover:bg-white/20 transition-colors font-medium"
               >
                 Book Now
               </motion.button>

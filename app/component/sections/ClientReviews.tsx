@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useTheme } from "next-themes";
 
 import {
   Star,
@@ -141,10 +142,18 @@ export default function ClientReviews() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [visibleCount, setVisibleCount] = useState(4);
   const [isScrolling, setIsScrolling] = useState(false);
   const [totalSlides, setTotalSlides] = useState(1);
+  const [mounted, setMounted] = useState(false);
+
+  // Use next-themes for dark mode
+  const { resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === "dark";
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -164,18 +173,8 @@ export default function ClientReviews() {
     handleResize();
     window.addEventListener("resize", handleResize);
 
-    const darkModeMediaQuery = window.matchMedia(
-      "(prefers-color-scheme: dark)",
-    );
-    setIsDarkMode(darkModeMediaQuery.matches);
-    const darkModeListener = (e: MediaQueryListEvent) => {
-      setIsDarkMode(e.matches);
-    };
-    darkModeMediaQuery.addEventListener("change", darkModeListener);
-
     return () => {
       window.removeEventListener("resize", handleResize);
-      darkModeMediaQuery.removeEventListener("change", darkModeListener);
     };
   }, []);
 
@@ -309,6 +308,7 @@ export default function ClientReviews() {
 
   const visibleReviews = getVisibleReviews();
 
+  // Theme-based styles
   const textColor = isDarkMode ? "text-white" : "text-slate-900";
   const textSecondary = isDarkMode ? "text-slate-300" : "text-slate-500";
   const cardBg = isDarkMode ? "bg-[#1a1f2f]" : "bg-white";
@@ -342,6 +342,15 @@ export default function ClientReviews() {
     ? "shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
     : "shadow-[0_25px_70px_rgba(0,0,0,0.12)]";
 
+  // Don't render until mounted to avoid hydration mismatch
+  if (!mounted) {
+    return (
+      <section className={`relative overflow-hidden ${sectionBg}`}>
+        <div className="min-h-[600px]" />
+      </section>
+    );
+  }
+
   return (
     <motion.section
       ref={sectionRef}
@@ -354,15 +363,15 @@ export default function ClientReviews() {
       {/* Background Glows */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className={`absolute right-0 top-0 h-175 w-175 rounded-full ${glowColor}`}
+          className={`absolute right-0 top-0 h-[700px] w-[700px] rounded-full ${glowColor}`}
         />
         <div
-          className={`absolute -left-40 bottom-0 h-125 w-125 rounded-full ${glowColor2}`}
+          className={`absolute -left-40 bottom-0 h-[500px] w-[500px] rounded-full ${glowColor2}`}
         />
         {isDarkMode && (
           <>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-150 w-150 rounded-full bg-blue-950/20 blur-[200px]" />
-            <div className="absolute bottom-0 right-0 h-100 w-100 rounded-full bg-indigo-950/20 blur-[150px]" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-blue-950/20 blur-[200px]" />
+            <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-indigo-950/20 blur-[150px]" />
           </>
         )}
       </div>
@@ -393,9 +402,10 @@ export default function ClientReviews() {
               </h2>
 
               <p className={`mt-8 max-w-xl text-lg leading-9 ${textSecondary}`}>
-                Thousands of customers across Crawley, Gatwick, Horsham,Lewes,East Grinstead,Horley,
-                Haywards Heath and the surrounding areas trust Western Cars for
-                airport transfers, executive travel and everyday journeys.
+                Thousands of customers across Crawley, Gatwick, Horsham, Lewes,
+                East Grinstead, Horley, Haywards Heath and the surrounding areas
+                trust Western Cars for airport transfers, executive travel and
+                everyday journeys.
               </p>
 
               {/* Rating */}
@@ -471,7 +481,11 @@ export default function ClientReviews() {
 
               {/* Mercedes */}
               <Image
-                src="/assets/ReviewImage-dark.png"
+                src={
+                  isDarkMode
+                    ? "/assets/ReviewImage-dark.png"
+                    : "/assets/ReviewImage-whitebg.png"
+                }
                 alt="Western Cars Mercedes"
                 width={900}
                 height={700}
@@ -523,7 +537,7 @@ export default function ClientReviews() {
               </div>
               <span className={`text-sm ${textSecondary}`}>•</span>
               <span className={`text-sm ${textSecondary}`}>
-                 reviews
+                {reviews.length} reviews
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -551,7 +565,7 @@ export default function ClientReviews() {
               flexWrap: isMobile || isTablet ? "wrap" : "nowrap",
             }}
           >
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="sync">
               {(isMobile || isTablet ? visibleReviews : reviews).map(
                 (review, index) => (
                   <motion.div
@@ -560,7 +574,7 @@ export default function ClientReviews() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.4, delay: index * 0.05 }}
-                    className="review-card-wrapper flex-shrink-0"
+                    className="review-card-wrapper shrink-0"
                     style={{
                       width: isMobile
                         ? "100%"
