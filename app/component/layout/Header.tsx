@@ -36,7 +36,7 @@ const servicesMenu = [
   },
 ];
 
-const scrollTo = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+const scrollTo = (e: React.MouseEvent<HTMLElement>, id: string) => {
   e.preventDefault();
 
   const lenis = getLenis();
@@ -46,6 +46,11 @@ const scrollTo = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
       duration: 1.5,
     });
   }
+
+   document.getElementById(id)?.scrollIntoView({
+     behavior: "smooth",
+     block: "start",
+   });
 };
 
 export default function Header({ setBookingOpen }: HeaderProps) {
@@ -81,14 +86,17 @@ export default function Header({ setBookingOpen }: HeaderProps) {
     return () => observer.disconnect();
   }, []);
 
-  const isDark = resolvedTheme === "dark";
+  // `resolvedTheme` can be available in the browser before hydration (from
+  // next-themes' inline script), while the server only has the fallback. Keep
+  // the first client render on that same fallback and apply the saved theme
+  // once React has mounted.
+  const isDark = mounted && resolvedTheme === "dark";
 
   // Theme-based styles
-  
 
   const textColor = "text-white";
-  const textColorHover =  "hover:text-white" ;
-  const textColorMuted = "text-white/90" ;
+  const textColorHover = "hover:text-white";
+  const textColorMuted = "text-white/90";
   const textColorMutedHover = "hover:text-white";
 
   const mobileMenuBg = isDark
@@ -112,10 +120,9 @@ export default function Header({ setBookingOpen }: HeaderProps) {
     ? "bg-orange-500 hover:bg-orange-600 text-white"
     : "bg-orange-500 hover:bg-orange-600 text-white";
 
-  const themeToggleBg =  "bg-white/10 hover:bg-white/20 border border-white/20"
-    
+  const themeToggleBg = "bg-white/10 hover:bg-white/20 border border-white/20";
 
-  const activeNavColor = "text-white" ;
+  const activeNavColor = "text-white";
   const activeIndicatorColor = isDark ? "bg-orange-400" : "bg-orange-500";
 
   return (
@@ -165,33 +172,16 @@ export default function Header({ setBookingOpen }: HeaderProps) {
             )}
           </motion.a>
           <motion.a
-            href="#corporate-account"
-            onClick={(e) => scrollTo(e, "corporate-account")}
+            href="#story"
+            onClick={(e) => scrollTo(e, "story")}
             className={`relative text-sm tracking-wide font-medium transition-colors ${
-              activeSection === "corporate-account"
+              activeSection === "story"
                 ? activeNavColor
                 : `${textColorMuted} ${textColorMutedHover}`
             }`}
           >
-            Corporate Account
-            {activeSection === "corporate-account" && (
-              <motion.span
-                layoutId="desktop-active-nav"
-                className={`absolute left-0 -bottom-2 h-0.5 w-full ${activeIndicatorColor} rounded-full`}
-              />
-            )}
-          </motion.a>
-          <motion.a
-            href="#fleet"
-            onClick={(e) => scrollTo(e, "fleet")}
-            className={`relative text-sm tracking-wide font-medium transition-colors ${
-              activeSection === "fleet"
-                ? activeNavColor
-                : `${textColorMuted} ${textColorMutedHover}`
-            }`}
-          >
-            Fleet
-            {activeSection === "fleet" && (
+            Our Story
+            {activeSection === "story" && (
               <motion.span
                 layoutId="desktop-active-nav"
                 className={`absolute left-0 -bottom-2 h-0.5 w-full ${activeIndicatorColor} rounded-full`}
@@ -205,10 +195,29 @@ export default function Header({ setBookingOpen }: HeaderProps) {
             onMouseLeave={() => setServicesOpen(false)}
           >
             <button
-              onClick={() => setServicesOpen(!servicesOpen)}
-              className={`flex items-center gap-1 ${textColor} ${textColorHover} transition-colors text-sm tracking-wide font-medium`}
+              onClick={(e) => {
+                setServicesOpen(!servicesOpen);
+                scrollTo(e, "services");
+              }}
+              className={`flex items-center gap-1 ${textColor} ${textColorHover} transition-colors text-sm tracking-wide font-medium cursor-pointer`}
             >
-              Services <ChevronDown size={16} />
+              Services
+              <motion.div
+                animate={{ rotate: servicesOpen ? 180 : 0 }}
+                transition={{ duration: 0.3 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setServicesOpen(!servicesOpen);
+                }}
+                className="cursor-pointer"
+              >
+                <ChevronDown
+                  size={16}
+                  className={`transition-colors ${
+                    servicesOpen ? "text-orange-400" : "text-gray-400"
+                  }`}
+                />
+              </motion.div>
             </button>
             <AnimatePresence>
               {servicesOpen && (
@@ -244,6 +253,24 @@ export default function Header({ setBookingOpen }: HeaderProps) {
           </motion.div>
 
           <motion.a
+            href="#fleet"
+            onClick={(e) => scrollTo(e, "fleet")}
+            className={`relative text-sm tracking-wide font-medium transition-colors ${
+              activeSection === "fleet"
+                ? activeNavColor
+                : `${textColorMuted} ${textColorMutedHover}`
+            }`}
+          >
+            Reviews
+            {activeSection === "fleet" && (
+              <motion.span
+                layoutId="desktop-active-nav"
+                className={`absolute left-0 -bottom-2 h-0.5 w-full ${activeIndicatorColor} rounded-full`}
+              />
+            )}
+          </motion.a>
+
+          <motion.a
             href="#contact"
             className={`relative text-sm tracking-wide font-medium transition-colors ${
               activeSection === "contact"
@@ -252,7 +279,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
             }`}
             onClick={(e) => scrollTo(e, "contact")}
           >
-            Contact
+            About
             {activeSection === "contact" && (
               <motion.span
                 layoutId="desktop-active-nav"
@@ -260,6 +287,25 @@ export default function Header({ setBookingOpen }: HeaderProps) {
               />
             )}
           </motion.a>
+
+          <motion.a
+            href="#contact"
+            className={`relative text-sm tracking-wide font-medium transition-colors ${
+              activeSection === "contact"
+                ? activeNavColor
+                : `${textColorMuted} ${textColorMutedHover}`
+            }`}
+            onClick={(e) => scrollTo(e, "contact")}
+          >
+            Coverage
+            {activeSection === "contact" && (
+              <motion.span
+                layoutId="desktop-active-nav"
+                className={`absolute left-0 -bottom-2 h-0.5 w-full ${activeIndicatorColor} rounded-full`}
+              />
+            )}
+          </motion.a>
+
           <motion.a
             href="#faq"
             onClick={(e) => scrollTo(e, "faq")}
@@ -281,23 +327,6 @@ export default function Header({ setBookingOpen }: HeaderProps) {
 
         {/* Right side buttons */}
         <div className="hidden md:flex items-center gap-3">
-          {/* Theme Toggle */}
-          {mounted && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setTheme(isDark ? "light" : "dark")}
-              className={`p-2.5 rounded-full transition-all duration-300 ${themeToggleBg}`}
-              aria-label="Toggle theme"
-            >
-              {isDark ? (
-                <Sun className="h-5 w-5 text-yellow-400" />
-              ) : (
-                <Moon className="h-5 w-5 text-white-400" />
-              )}
-            </motion.button>
-          )}
-
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}

@@ -2,15 +2,11 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 
 import {
   Star,
-  ArrowLeft,
-  ArrowRight,
   ShieldCheck,
   Clock3,
   Car,
@@ -18,8 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-
-gsap.registerPlugin(ScrollTrigger);
 
 interface Review {
   name: string;
@@ -136,20 +130,19 @@ const bottomFeatures = [
   },
 ];
 
+// Duplicate reviews for infinite scrolling (4 copies for seamless loop)
+const infiniteReviews = [...reviews, ...reviews, ...reviews, ...reviews];
+
 export default function ClientReviews() {
   const sectionRef = useRef<HTMLElement>(null);
-  const cardsContainerRef = useRef<HTMLDivElement>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isTablet, setIsTablet] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(4);
-  const [isScrolling, setIsScrolling] = useState(false);
-  const [totalSlides, setTotalSlides] = useState(1);
   const [mounted, setMounted] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [currentMobileIndex, setCurrentMobileIndex] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Use next-themes for dark mode
   const { resolvedTheme } = useTheme();
-  const isDarkMode = resolvedTheme === "dark";
+  const isDarkMode = mounted && resolvedTheme === "dark";
 
   useEffect(() => {
     setMounted(true);
@@ -157,17 +150,7 @@ export default function ClientReviews() {
 
   useEffect(() => {
     const handleResize = () => {
-      const width = window.innerWidth;
-      setIsMobile(width < 768);
-      setIsTablet(width >= 768 && width < 1024);
-
-      let count = 4;
-      if (width >= 1280) count = 4;
-      else if (width >= 1024) count = 3;
-      else if (width >= 768) count = 2;
-      else count = 1;
-      setVisibleCount(count);
-      setTotalSlides(Math.ceil(reviews.length / count));
+      setIsMobile(window.innerWidth < 768);
     };
 
     handleResize();
@@ -178,135 +161,18 @@ export default function ClientReviews() {
     };
   }, []);
 
-  // GSAP ScrollTrigger for horizontal scrolling
-  useEffect(() => {
-    if (isMobile || isTablet) return;
-
-    if (!sectionRef.current || !cardsContainerRef.current) return;
-
-    const ctx = gsap.context(() => {
-      const container = cardsContainerRef.current;
-      const section = sectionRef.current;
-      if (!container || !section) return;
-
-      // Calculate the total width of all cards
-      const cards = container.querySelectorAll(".review-card-wrapper");
-      if (cards.length === 0) return;
-
-      let totalWidth = 0;
-      cards.forEach((card) => {
-        totalWidth += (card as HTMLElement).offsetWidth + 24;
-      });
-      totalWidth -= 24;
-
-      const viewportWidth = window.innerWidth;
-      const maxScroll = Math.max(0, totalWidth - viewportWidth + 80);
-
-      if (maxScroll <= 0) return;
-
-      // Kill any existing ScrollTriggers
-      ScrollTrigger.getAll().forEach((st) => st.kill());
-
-      // Create the horizontal scroll animation
-      const tl = gsap.to(container, {
-        x: -maxScroll,
-        ease: "none",
-        scrollTrigger: {
-          trigger: container,
-          start: "top 30%",
-          end: `+=${maxScroll + window.innerHeight * 0.5}`,
-          pin: true,
-          scrub: 1.5,
-          anticipatePin: 1,
-          invalidateOnRefresh: true,
-          onUpdate: (self) => {
-            const progress = self.progress;
-            const slideIndex = Math.floor(progress * totalSlides);
-            const newIndex = Math.min(slideIndex, totalSlides - 1);
-            if (newIndex !== currentIndex && !isScrolling) {
-              setIsScrolling(true);
-              setCurrentIndex(newIndex);
-              setTimeout(() => setIsScrolling(false), 300);
-            }
-          },
-        },
-      });
-
-      return () => {
-        tl.kill();
-        ScrollTrigger.getAll().forEach((st) => st.kill());
-      };
-    }, sectionRef);
-
-    return () => {
-      ctx.revert();
-      ScrollTrigger.getAll().forEach((st) => st.kill());
-    };
-  }, [isMobile, isTablet, visibleCount, totalSlides]);
-
-  const currentSlideIndex = Math.min(currentIndex, totalSlides - 1);
-
+  // Mobile controls
   const nextSlide = () => {
-    if (isScrolling || totalSlides <= 1) return;
-    const newIndex = (currentIndex + 1) % totalSlides;
-    setCurrentIndex(newIndex);
-
-    if (!isMobile && !isTablet && cardsContainerRef.current) {
-      const container = cardsContainerRef.current;
-      const cards = container.querySelectorAll(".review-card-wrapper");
-      let totalWidth = 0;
-      cards.forEach((card) => {
-        totalWidth += (card as HTMLElement).offsetWidth + 24;
-      });
-      totalWidth -= 24;
-      const viewportWidth = window.innerWidth;
-      const maxScroll = Math.max(0, totalWidth - viewportWidth + 80);
-      const progress = newIndex / (totalSlides - 1);
-      const targetX = -maxScroll * progress;
-
-      gsap.to(container, {
-        x: targetX,
-        duration: 0.8,
-        ease: "power2.inOut",
-        overwrite: "auto",
-      });
-    }
+    setCurrentMobileIndex((prev) =>
+      prev === reviews.length - 1 ? 0 : prev + 1,
+    );
   };
 
   const prevSlide = () => {
-    if (isScrolling || totalSlides <= 1) return;
-    const newIndex = (currentIndex - 1 + totalSlides) % totalSlides;
-    setCurrentIndex(newIndex);
-
-    if (!isMobile && !isTablet && cardsContainerRef.current) {
-      const container = cardsContainerRef.current;
-      const cards = container.querySelectorAll(".review-card-wrapper");
-      let totalWidth = 0;
-      cards.forEach((card) => {
-        totalWidth += (card as HTMLElement).offsetWidth + 24;
-      });
-      totalWidth -= 24;
-      const viewportWidth = window.innerWidth;
-      const maxScroll = Math.max(0, totalWidth - viewportWidth + 80);
-      const progress = newIndex / (totalSlides - 1);
-      const targetX = -maxScroll * progress;
-
-      gsap.to(container, {
-        x: targetX,
-        duration: 0.8,
-        ease: "power2.inOut",
-        overwrite: "auto",
-      });
-    }
+    setCurrentMobileIndex((prev) =>
+      prev === 0 ? reviews.length - 1 : prev - 1,
+    );
   };
-
-  const getVisibleReviews = () => {
-    const start = currentSlideIndex * visibleCount;
-    const end = Math.min(start + visibleCount, reviews.length);
-    return reviews.slice(start, end);
-  };
-
-  const visibleReviews = getVisibleReviews();
 
   // Theme-based styles
   const textColor = isDarkMode ? "text-white" : "text-slate-900";
@@ -346,7 +212,7 @@ export default function ClientReviews() {
   if (!mounted) {
     return (
       <section className={`relative overflow-hidden ${sectionBg}`}>
-        <div className="min-h-[600px]" />
+        <div className="min-h-150" />
       </section>
     );
   }
@@ -363,10 +229,10 @@ export default function ClientReviews() {
       {/* Background Glows */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className={`absolute right-0 top-0 h-[700px] w-[700px] rounded-full ${glowColor}`}
+          className={`absolute right-0 top-0 h-175 w-175 rounded-full ${glowColor}`}
         />
         <div
-          className={`absolute -left-40 bottom-0 h-[500px] w-[500px] rounded-full ${glowColor2}`}
+          className={`absolute -left-40 bottom-0 h-125 w-125 rounded-full ${glowColor2}`}
         />
         {isDarkMode && (
           <>
@@ -414,7 +280,7 @@ export default function ClientReviews() {
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Star
                       key={i}
-                      className="h-7 w-7 fill-yellow-400 text-yellow-400"
+                      className="h-7 w-7 fill-green-400 text-green-400"
                     />
                   ))}
                 </div>
@@ -424,24 +290,6 @@ export default function ClientReviews() {
                     Based on 847+ verified reviews
                   </p>
                 </div>
-              </div>
-
-              {/* Navigation */}
-              <div className="mt-14 flex gap-5">
-                <button
-                  onClick={prevSlide}
-                  className={`flex h-14 w-14 items-center justify-center rounded-full border transition-all duration-300 hover:-translate-y-1 ${navButtonBg} ${shadowColor}`}
-                >
-                  <ArrowLeft
-                    className={`h-5 w-5 ${isDarkMode ? "text-white" : "text-slate-700"}`}
-                  />
-                </button>
-                <button
-                  onClick={nextSlide}
-                  className={`flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300 hover:-translate-y-1 ${navButtonPrimary} ${shadowColor}`}
-                >
-                  <ArrowRight className="h-5 w-5 text-white" />
-                </button>
               </div>
             </motion.div>
 
@@ -540,115 +388,109 @@ export default function ClientReviews() {
                 {reviews.length} reviews
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={prevSlide}
-                className={`p-2 rounded-full border transition-all ${navButtonBg}`}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={nextSlide}
-                className={`p-2 rounded-full border transition-all ${navButtonBg}`}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
           </div>
 
-          {/* Review Cards - Horizontal Scroll Container */}
-          <div
-            ref={cardsContainerRef}
-            className="flex gap-6 transition-none will-change-transform"
-            style={{
-              width: isMobile || isTablet ? "100%" : "max-content",
-              flexWrap: isMobile || isTablet ? "wrap" : "nowrap",
-            }}
-          >
-            <AnimatePresence mode="sync">
-              {(isMobile || isTablet ? visibleReviews : reviews).map(
-                (review, index) => (
-                  <motion.div
-                    key={`${isMobile || isTablet ? currentSlideIndex : "desktop"}-${index}`}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.4, delay: index * 0.05 }}
-                    className="review-card-wrapper shrink-0"
-                    style={{
-                      width: isMobile
-                        ? "100%"
-                        : isTablet
-                          ? "calc(50% - 12px)"
-                          : "300px",
-                    }}
+          {/* Desktop View - Continuous Auto Scroll */}
+          <div className="hidden md:block relative">
+            <div
+              className="overflow-hidden"
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+            >
+              <motion.div
+                className="flex gap-6 w-max"
+                animate={{
+                  x: ["0%", "-25%"],
+                }}
+                transition={{
+                  duration: 50,
+                  ease: "linear",
+                  repeat: Infinity,
+                  repeatType: "loop",
+                }}
+                style={{
+                  animationPlayState: isPaused ? "paused" : "running",
+                }}
+              >
+                {infiniteReviews.map((review, index) => (
+                  <div
+                    key={`${index}-${review.name}`}
+                    className="review-card-wrapper shrink-0 w-[300px]"
                   >
                     <ReviewCard review={review} isDarkMode={isDarkMode} />
-                  </motion.div>
-                ),
-              )}
-            </AnimatePresence>
+                  </div>
+                ))}
+              </motion.div>
+            </div>
+
+            {/* Gradient overlays for fade effect */}
+            <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-[#f6f8fc] dark:from-[#0a0e1a] to-transparent pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-[#f6f8fc] dark:from-[#0a0e1a] to-transparent pointer-events-none" />
           </div>
 
-          {/* Scroll Progress Indicator */}
-          {!isMobile && !isTablet && totalSlides > 1 && (
-            <div className="mt-8 flex justify-center gap-2">
-              {Array.from({ length: totalSlides }).map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    setCurrentIndex(index);
-                    if (cardsContainerRef.current) {
-                      const container = cardsContainerRef.current;
-                      const cards = container.querySelectorAll(
-                        ".review-card-wrapper",
-                      );
-                      let totalWidth = 0;
-                      cards.forEach((card) => {
-                        totalWidth += (card as HTMLElement).offsetWidth + 24;
-                      });
-                      totalWidth -= 24;
-                      const viewportWidth = window.innerWidth;
-                      const maxScroll = Math.max(
-                        0,
-                        totalWidth - viewportWidth + 80,
-                      );
-                      const progress = index / (totalSlides - 1);
-                      const targetX = -maxScroll * progress;
-                      gsap.to(container, {
-                        x: targetX,
-                        duration: 0.6,
-                        ease: "power2.out",
-                        overwrite: "auto",
-                      });
-                    }
-                  }}
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    index === currentSlideIndex
-                      ? `w-8 ${isDarkMode ? "bg-blue-500" : "bg-blue-600"}`
-                      : `w-2 ${isDarkMode ? "bg-slate-600" : "bg-slate-300"}`
-                  }`}
-                />
-              ))}
+          {/* Mobile View - Manual Carousel */}
+          <div className="md:hidden relative">
+            <div className="overflow-hidden">
+              <motion.div
+                className="flex transition-transform duration-300 ease-in-out"
+                animate={{
+                  x: `-${currentMobileIndex * 100}%`,
+                }}
+                transition={{ duration: 0.4, ease: "easeInOut" }}
+              >
+                {reviews.map((review, index) => (
+                  <div
+                    key={`${index}-${review.name}`}
+                    className="w-full flex-shrink-0 px-2"
+                  >
+                    <ReviewCard review={review} isDarkMode={isDarkMode} />
+                  </div>
+                ))}
+              </motion.div>
             </div>
-          )}
 
-          {/* Mobile/Tablet Pagination Dots */}
-          {(isMobile || isTablet) && totalSlides > 1 && (
-            <div className="mt-8 flex justify-center gap-2">
-              {Array.from({ length: totalSlides }).map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => setCurrentIndex(index)}
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    index === currentSlideIndex
-                      ? `w-8 ${isDarkMode ? "bg-blue-500" : "bg-blue-600"}`
-                      : `w-2 ${isDarkMode ? "bg-slate-600" : "bg-slate-300"}`
-                  }`}
-                />
-              ))}
+            {/* Mobile Navigation */}
+            <div className="flex items-center justify-between mt-6 px-4">
+              <button
+                onClick={prevSlide}
+                className={`p-2 rounded-full ${
+                  isDarkMode
+                    ? "bg-white/10 hover:bg-white/20 text-white"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                } transition-colors`}
+                aria-label="Previous review"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+
+              <div className="flex gap-1.5">
+                {reviews.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentMobileIndex(index)}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      index === currentMobileIndex
+                        ? `w-6 ${isDarkMode ? "bg-white" : "bg-gray-800"}`
+                        : `w-1.5 ${isDarkMode ? "bg-white/30" : "bg-gray-300"}`
+                    }`}
+                    aria-label={`Go to review ${index + 1}`}
+                  />
+                ))}
+              </div>
+
+              <button
+                onClick={nextSlide}
+                className={`p-2 rounded-full ${
+                  isDarkMode
+                    ? "bg-white/10 hover:bg-white/20 text-white"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                } transition-colors`}
+                aria-label="Next review"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
         {/* ================= BOTTOM FEATURES ================= */}
@@ -721,7 +563,7 @@ function ReviewCard({
               key={i}
               className={`h-4 w-4 ${
                 i < review.rating
-                  ? "fill-yellow-400 text-yellow-400"
+                  ? "fill-green-400 text-green-400"
                   : "fill-gray-300 text-gray-300 dark:fill-gray-600 dark:text-gray-600"
               }`}
             />

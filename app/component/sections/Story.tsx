@@ -12,8 +12,8 @@ export default function Story() {
     offset: ["start end", "end start"],
   });
 
-  const opacity = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.6, 1, 1, 0.6]);
-  const scale = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.95, 1, 1, 0.95]);
+  const opacity = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.6, 1, 1, 0.8]);
+ 
 
   const stats = [
     { icon: Star, value: "4.9", label: "Average Rating" },
@@ -26,16 +26,16 @@ export default function Story() {
     <motion.section
       ref={sectionRef}
       id="story"
-      style={{ opacity, scale }}
+      style={{ opacity}}
       className="relative py-24 md:py-32 overflow-hidden"
     >
       {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black via-[#0a0e1a] to-black" />
+      <div className="absolute inset-0 bg-linear-to-br from-black via-[#0a0e1a] to-black" />
       
       {/* Animated Gradient Orbs */}
       <div className="absolute top-0 -left-40 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl animate-pulse" />
       <div className="absolute bottom-0 -right-40 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse delay-1000" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-white/5 rounded-full blur-3xl" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-200 h-200 bg-white/5 rounded-full blur-3xl" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-6">
         {/* Header */}
@@ -71,7 +71,7 @@ export default function Story() {
               <h3 className="text-2xl md:text-3xl font-semibold text-white/90 leading-tight">
                 Effortless Elegance,
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-purple-400">
                   Personalized Journeys
                 </span>
               </h3>
@@ -118,7 +118,7 @@ export default function Story() {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="group inline-flex items-center gap-3 px-8 py-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300"
+              className="group inline-flex items-center gap-3 px-8 py-4 rounded-full bg-linear-to-r from-blue-500 to-purple-500 text-white font-medium shadow-lg  shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300"
             >
               Learn More About Us
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
@@ -139,12 +139,13 @@ export default function Story() {
             
             {/* Image Container */}
             <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10">
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10" />
+              <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent z-10" />
               <Image
-                src="/assets/Story_dark.png"
+                src="/assets/OurStory.jpg"
                 alt="Western Cars Story"
                 width={600}
                 height={700}
+                priority
                 className="w-full h-full object-cover"
               />
               
@@ -164,14 +165,24 @@ export default function Story() {
                           <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                         ))}
                       </div>
-                      <span className="text-white/60 text-sm">4.9</span>
+                      <span className="text-white/60 text-sm">4.1</span>
                     </div>
                     <p className="text-white/80 text-sm font-medium mt-1">
                       "Exceptional service every time"
                     </p>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-xs font-bold">WC</span>
+                  <div className="w-10 h-10 rounded-full bg-linear-to-br from-blue-500 to-purple-500 flex items-center justify-center shrink-0">
+                    <span className="text-white text-xs font-bold">
+                     
+                      <Image
+                        src="/assets/owner.png"
+                        alt="Western Cars Logo"
+                        width={20}
+                        height={20}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+
+                    </span>
                   </div>
                 </div>
               </motion.div>

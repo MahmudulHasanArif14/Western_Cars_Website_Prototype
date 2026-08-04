@@ -15,6 +15,8 @@ import FAQ from "./component/sections/FAQ";
 import ThemeToggle from "./ui/ThemeToggle";
 import SoundToggle from "./ui/SoundToggle";
 import { FAQData } from "./data/faqData";
+import OurServices from "./component/sections/Services";
+import AreaWeCover from "./component/sections/AreaWeCover";
 
 export default function Home() {
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -53,9 +55,12 @@ export default function Home() {
           setIsMuted={setIsMuted}
         />
         <Story />
-        <Rates setBookingOpen={setBookingOpen} />
+
+        <OurServices />
+        {/* <Rates setBookingOpen={setBookingOpen} /> */}
         <ClientReview />
         <Benefits />
+        <AreaWeCover></AreaWeCover>
         <FAQ faqOpen={faqOpen} setFaqOpen={setFaqOpen} faqs={FAQData} />
         <Footer />
       </main>

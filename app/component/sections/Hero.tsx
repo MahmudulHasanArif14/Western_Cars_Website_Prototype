@@ -40,21 +40,10 @@ export default function Hero({
   const heroScale = useTransform(scrollYProgress, [0, 0.5], [1, 1.1]);
 
   // Theme-based styles - only use dark/light values if mounted
-  const overlayBg = mounted
-    ? isDark
-      ? "bg-black/50"
-      : "bg-black/40"
-    : "bg-black/40";
-  const gradientOverlay = mounted
-    ? isDark
-      ? "bg-gradient-to-b from-black/40 via-black/20 to-black/70"
-      : "bg-gradient-to-b from-black/30 via-black/10 to-black/60"
-    : "bg-gradient-to-b from-black/30 via-black/10 to-black/60";
-  const glowBg = mounted
-    ? isDark
-      ? "bg-white/5 blur-3xl"
-      : "bg-white/10 blur-3xl"
-    : "bg-white/10 blur-3xl";
+  const overlayBg = "bg-black/40";
+  const gradientOverlay =
+    "bg-gradient-to-b from-black/30 via-black/10 to-black/60";
+  const glowBg = "bg-white/10 blur-3xl";
 
   // Handle video loading states
   const handleVideoLoaded = () => {
@@ -88,22 +77,30 @@ export default function Hero({
           <div className="absolute inset-0 bg-linear-to-br from-blue-900 via-black to-gray-900" />
         )}
 
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          onLoadedData={handleVideoLoaded}
-          onError={handleVideoError}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-            isVideoLoaded ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <source src="/assets/hero.webm" type="video/webm" />
-          <source src="/assets/hero.mp4" type="video/mp4" />
-        </video>
+        {isVideoError && !isVideoLoaded ? (
+          <img
+            src="/assets/HeroImage.png"
+            alt="Hero Image"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            onLoadedData={handleVideoLoaded}
+            onError={handleVideoError}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+              isVideoLoaded ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <source src="/assets/hero.webm" type="video/webm" />
+            <source src="/assets/hero.mp4" type="video/mp4" />
+          </video>
+        )}
       </motion.div>
 
       {/* Overlays */}
