@@ -55,7 +55,7 @@ const benefits: Benefit[] = [
 ];
 
 // Container variants for stagger animation
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,

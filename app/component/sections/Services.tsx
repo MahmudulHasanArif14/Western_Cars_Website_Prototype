@@ -17,6 +17,8 @@ import {
   Phone,
 } from "lucide-react";
 
+import type { Variants } from "framer-motion";
+
 interface Service {
   icon: any;
   title: string;
@@ -98,7 +100,7 @@ const services: Service[] = [
 ];
 
 // Container variants for stagger animation
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -109,7 +111,7 @@ const containerVariants = {
   },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: {
     opacity: 0,
     y: 30,
@@ -120,7 +122,7 @@ const itemVariants = {
     y: 0,
     scale: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 300,
       damping: 25,
       duration: 0.5,
@@ -262,7 +264,7 @@ export default function OurServices() {
   }
 
   return (
-    <section
+    <motion.section
       className={`relative overflow-hidden ${sectionBg} py-20 md:py-32`}
       id="services"
     >
@@ -368,6 +370,6 @@ export default function OurServices() {
           </motion.a>
         </motion.div>
       </div>
-    </section>
+    </motion.section>
   );
 }
