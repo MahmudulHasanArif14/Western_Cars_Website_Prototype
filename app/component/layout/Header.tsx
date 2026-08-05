@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ChevronDown, Sun, Moon } from "lucide-react";
 import Image from "next/image";
 import { getLenis } from "@/lib/lenis";
 import { useTheme } from "next-themes";
-import { useRef } from "react";
 
 interface HeaderProps {
   setBookingOpen: (open: boolean) => void;
@@ -43,8 +42,6 @@ const scrollTo = (
   setActiveSection?: (id: string) => void,
 ) => {
   e.preventDefault();
-
-  // Set active section immediately
   setActiveSection?.(id);
 
   const attemptScroll = (attempts = 0) => {
@@ -56,7 +53,6 @@ const scrollTo = (
         lenis.scrollTo(element, {
           duration: 1.5,
           onComplete: () => {
-            // Ensure active section is set after scroll completes
             setActiveSection?.(id);
           },
         });
@@ -65,8 +61,6 @@ const scrollTo = (
           behavior: "smooth",
           block: "start",
         });
-        // For native smooth scroll, we can't easily detect completion
-        // So we set it immediately and rely on the scroll spy to maintain it
         setActiveSection?.(id);
       }
       return true;
@@ -100,22 +94,23 @@ export default function Header({ setBookingOpen }: HeaderProps) {
   const [activeSection, setActiveSection] = useState("home");
   const [mounted, setMounted] = useState(false);
   const { theme, setTheme, resolvedTheme } = useTheme();
+
+  // Ref to always hold the current activeSection inside closure listeners
   const activeSectionRef = useRef(activeSection);
+  // Keep activeSectionRef updated whenever activeSection changes
+  useEffect(() => {
+    activeSectionRef.current = activeSection;
+  }, [activeSection]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Keep ref in sync with state
   useEffect(() => {
-    activeSectionRef.current = activeSection;
-    console.log(`Active section changed to: ${activeSection}`);
-  }, [activeSection]);
+    const lenis = getLenis();
+    if (!lenis) return;
 
-
-
-  useEffect(() => {
-    const navIds = [
+    const navIds = new Set([
       "home",
       "story",
       "services",
@@ -123,75 +118,67 @@ export default function Header({ setBookingOpen }: HeaderProps) {
       "benefits",
       "areaWeCover",
       "faq",
-    ];
+    ]);
 
-    // Get elements by ID (works on any HTML tag)
-    const getSections = () =>
-      navIds
-        .map((id) => document.getElementById(id))
-        .filter(Boolean) as HTMLElement[];
-
-    let sections = getSections();
-    let scrollTimeout: NodeJS.Timeout;
+    // Always get fresh elements from the DOM
+    const getSections = (): HTMLElement[] =>
+      Array.from(document.querySelectorAll("[id]")).filter((el) =>
+        navIds.has(el.id),
+      ) as HTMLElement[];
 
     const handleScroll = () => {
-      clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(() => {
-        let current = "";
-        const viewportTop = window.scrollY + 120;
+      const scrollY = lenis.scroll;
+      const viewportTop = scrollY + 100; // header height offset
+      let current = "";
 
-        sections.forEach((section) => {
-          const rect = section.getBoundingClientRect();
-          if (rect.height === 0) return; // skip invisible/empty sections
+      const sections = getSections(); // fetch live
+      let lastValidSection: string | null = null;
 
-          const sectionTop = rect.top + window.scrollY;
-          const sectionBottom = sectionTop + rect.height;
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect();
+        // Ignore hidden / empty elements
+        if (rect.height === 0 || rect.width === 0) continue;
 
-          if (viewportTop >= sectionTop && viewportTop < sectionBottom) {
-            current = section.id;
-          }
-        });
+        const sectionTop = rect.top + scrollY;
+        const sectionBottom = sectionTop + rect.height;
 
-        if (current && current !== activeSectionRef.current) {
-          setActiveSection(current);
+        if (rect.top <= window.innerHeight) {
+          lastValidSection = section.id; // any section in view
         }
-      }, 50);
+
+        if (viewportTop >= sectionTop && viewportTop < sectionBottom) {
+          current = section.id;
+          break; // first match wins (top to bottom order)
+        }
+      }
+
+      // Fallback: if we're near the page bottom, force last section
+      if (!current && lastValidSection) {
+        const maxScroll = document.body.scrollHeight - window.innerHeight;
+        if (scrollY >= maxScroll - 5) {
+          current = lastValidSection;
+        }
+      }
+
+      if (current && current !== activeSectionRef.current) {
+        setActiveSection(current);
+      }
     };
 
-    const onResize = () => {
-      sections = getSections(); // refresh in case DOM changed
-      handleScroll();
-    };
+    lenis.on("scroll", handleScroll);
+    handleScroll();
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", onResize);
-    handleScroll(); // initial check
+    // Resize / layout shift → re‑eval
+    const observer = new ResizeObserver(() => handleScroll());
+    observer.observe(document.body);
 
     return () => {
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", onResize);
-      clearTimeout(scrollTimeout);
+      lenis.off("scroll", handleScroll);
+      observer.disconnect();
     };
   }, []);
 
-
-
-
-
-
-
-
-
-
-
-  
-  // `resolvedTheme` can be available in the browser before hydration (from
-  // next-themes' inline script), while the server only has the fallback. Keep
-  // the first client render on that same fallback and apply the saved theme
-  // once React has mounted.
   const isDark = mounted && resolvedTheme === "dark";
-
-  // Theme-based styles
 
   const textColor = "text-white";
   const textColorHover = "hover:text-white";
@@ -211,14 +198,8 @@ export default function Header({ setBookingOpen }: HeaderProps) {
     : "text-gray-600 hover:text-orange-500";
   const dropdownTitle = isDark ? "text-white" : "text-gray-800";
 
-  const buttonBg = isDark
-    ? "bg-orange-500 hover:bg-orange-600"
-    : "bg-orange-500 hover:bg-orange-600";
-
-  const mobileButtonBg = isDark
-    ? "bg-orange-500 hover:bg-orange-600 text-white"
-    : "bg-orange-500 hover:bg-orange-600 text-white";
-
+  const buttonBg = "bg-orange-500 hover:bg-orange-600";
+  const mobileButtonBg = "bg-orange-500 hover:bg-orange-600 text-white";
   const themeToggleBg = "bg-white/10 hover:bg-white/20 border border-white/20";
 
   const activeNavColor = "text-white";
@@ -229,7 +210,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className={`fixed top-0 inset-x-0 z-50 w-full transition-all duration-300 `}
+      className="fixed top-0 inset-x-0 z-50 w-full transition-all duration-300"
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between px-6 lg:px-8 py-4 lg:py-5">
         {/* Logo */}
@@ -242,7 +223,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
           onClick={(e) => scrollTo(e, "home", setActiveSection)}
         >
           <Image
-            src={"/assets/logo.png"}
+            src="/assets/logo.png"
             alt="Western Cars Logo"
             width={200}
             height={50}
@@ -270,6 +251,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
               />
             )}
           </motion.a>
+
           <motion.a
             href="#story"
             onClick={(e) => scrollTo(e, "story", setActiveSection)}
@@ -324,6 +306,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                 />
               </motion.div>
             </button>
+
             <AnimatePresence>
               {servicesOpen && (
                 <motion.div
@@ -377,12 +360,12 @@ export default function Header({ setBookingOpen }: HeaderProps) {
 
           <motion.a
             href="#benefits"
+            onClick={(e) => scrollTo(e, "benefits", setActiveSection)}
             className={`relative text-sm tracking-wide font-medium transition-colors ${
               activeSection === "benefits"
                 ? activeNavColor
                 : `${textColorMuted} ${textColorMutedHover}`
             }`}
-            onClick={(e) => scrollTo(e, "benefits", setActiveSection)}
           >
             About
             {activeSection === "benefits" && (
@@ -395,12 +378,12 @@ export default function Header({ setBookingOpen }: HeaderProps) {
 
           <motion.a
             href="#areaWeCover"
+            onClick={(e) => scrollTo(e, "areaWeCover", setActiveSection)}
             className={`relative text-sm tracking-wide font-medium transition-colors ${
               activeSection === "areaWeCover"
                 ? activeNavColor
                 : `${textColorMuted} ${textColorMutedHover}`
             }`}
-            onClick={(e) => scrollTo(e, "areaWeCover", setActiveSection)}
           >
             Coverage
             {activeSection === "areaWeCover" && (
