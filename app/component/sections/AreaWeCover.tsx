@@ -42,7 +42,7 @@ const containerVariants = {
   },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: {
     opacity: 1,
@@ -53,7 +53,7 @@ const itemVariants = {
       damping: 25,
     },
   },
-} as const;
+};
 
 export default function AreaWeCover() {
   const [mounted, setMounted] = useState(false);
