@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { CheckCircle2, Sun, Moon, MapPin, Compass } from "lucide-react";
 import { useTheme } from "next-themes";
+import { Variants } from "framer-motion";
 
 // Dynamically import map with SSR disabled
 const AreaMap = dynamic(() => import("./AreaMap"), {
@@ -52,7 +53,7 @@ const itemVariants = {
       damping: 25,
     },
   },
-};
+} as const;
 
 export default function AreaWeCover() {
   const [mounted, setMounted] = useState(false);
