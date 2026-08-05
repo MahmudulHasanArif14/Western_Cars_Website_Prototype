@@ -14,6 +14,7 @@ import {
   Award,
 } from "lucide-react";
 
+import type { Variants } from "framer-motion";
 interface Benefit {
   icon: any;
   title: string;
@@ -65,7 +66,7 @@ const containerVariants = {
   },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: {
     opacity: 0,
     y: 30,
@@ -76,7 +77,7 @@ const itemVariants = {
     y: 0,
     scale: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 300,
       damping: 25,
       duration: 0.5,
