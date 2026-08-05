@@ -262,7 +262,10 @@ export default function OurServices() {
   }
 
   return (
-    <section className={`relative overflow-hidden ${sectionBg} py-20 md:py-32`}>
+    <section
+      className={`relative overflow-hidden ${sectionBg} py-20 md:py-32`}
+      id="services"
+    >
       {/* Background Glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div

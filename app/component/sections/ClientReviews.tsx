@@ -552,8 +552,11 @@ function ReviewCard({
     : "shadow-[0_20px_50px_rgba(0,0,0,0.08)]";
 
   return (
-    <div
+    <motion.section
       className={`flex h-[280px] w-full flex-col justify-between rounded-2xl p-6 ${shadow} ${cardBg} transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_70px_rgba(0,0,0,0.15)] dark:hover:shadow-[0_30px_70px_rgba(0,0,0,0.6)]`}
+
+      id="review-card"
+    
     >
       {/* Top: Stars + Date */}
       <div className="flex items-center justify-between">
@@ -613,6 +616,6 @@ function ReviewCard({
           </div>
         </div>
       </div>
-    </div>
+    </motion.section>
   );
 }

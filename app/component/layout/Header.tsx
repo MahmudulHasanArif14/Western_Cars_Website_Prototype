@@ -6,6 +6,7 @@ import { Menu, X, ChevronDown, Sun, Moon } from "lucide-react";
 import Image from "next/image";
 import { getLenis } from "@/lib/lenis";
 import { useTheme } from "next-themes";
+import { useRef } from "react";
 
 interface HeaderProps {
   setBookingOpen: (open: boolean) => void;
@@ -36,21 +37,61 @@ const servicesMenu = [
   },
 ];
 
-const scrollTo = (e: React.MouseEvent<HTMLElement>, id: string) => {
+const scrollTo = (
+  e: React.MouseEvent<HTMLElement>,
+  id: string,
+  setActiveSection?: (id: string) => void,
+) => {
   e.preventDefault();
 
-  const lenis = getLenis();
+  // Set active section immediately
+  setActiveSection?.(id);
 
-  if (lenis) {
-    lenis.scrollTo(`#${id}`, {
-      duration: 1.5,
-    });
-  }
+  const attemptScroll = (attempts = 0) => {
+    const element = document.getElementById(id);
 
-   document.getElementById(id)?.scrollIntoView({
-     behavior: "smooth",
-     block: "start",
-   });
+    if (element) {
+      const lenis = getLenis();
+      if (lenis) {
+        lenis.scrollTo(element, {
+          duration: 1.5,
+          onComplete: () => {
+            // Ensure active section is set after scroll completes
+            setActiveSection?.(id);
+          },
+        });
+      } else {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        // For native smooth scroll, we can't easily detect completion
+        // So we set it immediately and rely on the scroll spy to maintain it
+        setActiveSection?.(id);
+      }
+      return true;
+    }
+
+    if (attempts < 15) {
+      setTimeout(() => attemptScroll(attempts + 1), 200);
+      return false;
+    }
+
+    const section = document.querySelector(`[id="${id}"]`);
+    if (section) {
+      section.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      setActiveSection?.(id);
+      return true;
+    }
+
+    console.warn(`Element #${id} not found after ${attempts} attempts`);
+    return false;
+  };
+
+  attemptScroll();
 };
 
 export default function Header({ setBookingOpen }: HeaderProps) {
@@ -59,33 +100,91 @@ export default function Header({ setBookingOpen }: HeaderProps) {
   const [activeSection, setActiveSection] = useState("home");
   const [mounted, setMounted] = useState(false);
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const activeSectionRef = useRef(activeSection);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Keep ref in sync with state
   useEffect(() => {
-    const sections = document.querySelectorAll("section[id]");
+    activeSectionRef.current = activeSection;
+    console.log(`Active section changed to: ${activeSection}`);
+  }, [activeSection]);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id);
+
+
+  useEffect(() => {
+    const navIds = [
+      "home",
+      "story",
+      "services",
+      "review-card",
+      "benefits",
+      "areaWeCover",
+      "faq",
+    ];
+
+    // Get elements by ID (works on any HTML tag)
+    const getSections = () =>
+      navIds
+        .map((id) => document.getElementById(id))
+        .filter(Boolean) as HTMLElement[];
+
+    let sections = getSections();
+    let scrollTimeout: NodeJS.Timeout;
+
+    const handleScroll = () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        let current = "";
+        const viewportTop = window.scrollY + 120;
+
+        sections.forEach((section) => {
+          const rect = section.getBoundingClientRect();
+          if (rect.height === 0) return; // skip invisible/empty sections
+
+          const sectionTop = rect.top + window.scrollY;
+          const sectionBottom = sectionTop + rect.height;
+
+          if (viewportTop >= sectionTop && viewportTop < sectionBottom) {
+            current = section.id;
           }
         });
-      },
-      {
-        threshold: 0.5,
-        rootMargin: "-80px 0px -40% 0px",
-      },
-    );
 
-    sections.forEach((section) => observer.observe(section));
+        if (current && current !== activeSectionRef.current) {
+          setActiveSection(current);
+        }
+      }, 50);
+    };
 
-    return () => observer.disconnect();
+    const onResize = () => {
+      sections = getSections(); // refresh in case DOM changed
+      handleScroll();
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+    handleScroll(); // initial check
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", onResize);
+      clearTimeout(scrollTimeout);
+    };
   }, []);
 
+
+
+
+
+
+
+
+
+
+
+  
   // `resolvedTheme` can be available in the browser before hydration (from
   // next-themes' inline script), while the server only has the fallback. Keep
   // the first client render on that same fallback and apply the saved theme
@@ -140,7 +239,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
           animate={{ scale: 1 }}
           transition={{ duration: 0.5 }}
           className="h-12 w-48 relative cursor-pointer shrink-0"
-          onClick={(e) => scrollTo(e, "home")}
+          onClick={(e) => scrollTo(e, "home", setActiveSection)}
         >
           <Image
             src={"/assets/logo.png"}
@@ -156,7 +255,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
         <nav className="hidden md:flex items-center gap-8 lg:gap-10">
           <motion.a
             href="#home"
-            onClick={(e) => scrollTo(e, "home")}
+            onClick={(e) => scrollTo(e, "home", setActiveSection)}
             className={`relative text-sm tracking-wide font-medium transition-colors ${
               activeSection === "home"
                 ? activeNavColor
@@ -173,7 +272,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
           </motion.a>
           <motion.a
             href="#story"
-            onClick={(e) => scrollTo(e, "story")}
+            onClick={(e) => scrollTo(e, "story", setActiveSection)}
             className={`relative text-sm tracking-wide font-medium transition-colors ${
               activeSection === "story"
                 ? activeNavColor
@@ -197,11 +296,17 @@ export default function Header({ setBookingOpen }: HeaderProps) {
             <button
               onClick={(e) => {
                 setServicesOpen(!servicesOpen);
-                scrollTo(e, "services");
+                scrollTo(e, "services", setActiveSection);
               }}
               className={`flex items-center gap-1 ${textColor} ${textColorHover} transition-colors text-sm tracking-wide font-medium cursor-pointer`}
             >
               Services
+              {activeSection === "services" && (
+                <motion.span
+                  layoutId="desktop-active-nav"
+                  className={`absolute left-0 -bottom-2 h-0.5 w-full ${activeIndicatorColor} rounded-full`}
+                />
+              )}
               <motion.div
                 animate={{ rotate: servicesOpen ? 180 : 0 }}
                 transition={{ duration: 0.3 }}
@@ -253,16 +358,16 @@ export default function Header({ setBookingOpen }: HeaderProps) {
           </motion.div>
 
           <motion.a
-            href="#fleet"
-            onClick={(e) => scrollTo(e, "fleet")}
+            href="#review-card"
+            onClick={(e) => scrollTo(e, "review-card", setActiveSection)}
             className={`relative text-sm tracking-wide font-medium transition-colors ${
-              activeSection === "fleet"
+              activeSection === "review-card"
                 ? activeNavColor
                 : `${textColorMuted} ${textColorMutedHover}`
             }`}
           >
             Reviews
-            {activeSection === "fleet" && (
+            {activeSection === "review-card" && (
               <motion.span
                 layoutId="desktop-active-nav"
                 className={`absolute left-0 -bottom-2 h-0.5 w-full ${activeIndicatorColor} rounded-full`}
@@ -271,16 +376,16 @@ export default function Header({ setBookingOpen }: HeaderProps) {
           </motion.a>
 
           <motion.a
-            href="#contact"
+            href="#benefits"
             className={`relative text-sm tracking-wide font-medium transition-colors ${
-              activeSection === "contact"
+              activeSection === "benefits"
                 ? activeNavColor
                 : `${textColorMuted} ${textColorMutedHover}`
             }`}
-            onClick={(e) => scrollTo(e, "contact")}
+            onClick={(e) => scrollTo(e, "benefits", setActiveSection)}
           >
             About
-            {activeSection === "contact" && (
+            {activeSection === "benefits" && (
               <motion.span
                 layoutId="desktop-active-nav"
                 className={`absolute left-0 -bottom-2 h-0.5 w-full ${activeIndicatorColor} rounded-full`}
@@ -289,16 +394,16 @@ export default function Header({ setBookingOpen }: HeaderProps) {
           </motion.a>
 
           <motion.a
-            href="#contact"
+            href="#areaWeCover"
             className={`relative text-sm tracking-wide font-medium transition-colors ${
-              activeSection === "contact"
+              activeSection === "areaWeCover"
                 ? activeNavColor
                 : `${textColorMuted} ${textColorMutedHover}`
             }`}
-            onClick={(e) => scrollTo(e, "contact")}
+            onClick={(e) => scrollTo(e, "areaWeCover", setActiveSection)}
           >
             Coverage
-            {activeSection === "contact" && (
+            {activeSection === "areaWeCover" && (
               <motion.span
                 layoutId="desktop-active-nav"
                 className={`absolute left-0 -bottom-2 h-0.5 w-full ${activeIndicatorColor} rounded-full`}
@@ -308,7 +413,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
 
           <motion.a
             href="#faq"
-            onClick={(e) => scrollTo(e, "faq")}
+            onClick={(e) => scrollTo(e, "faq", setActiveSection)}
             className={`relative text-sm tracking-wide font-medium transition-colors ${
               activeSection === "faq"
                 ? activeNavColor
@@ -379,7 +484,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                 <motion.a
                   href="#home"
                   onClick={(e) => {
-                    scrollTo(e, "home");
+                    scrollTo(e, "home", setActiveSection);
                     setMobileMenuOpen(false);
                   }}
                   className={`transition-colors ${
@@ -390,33 +495,20 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                 >
                   Home
                 </motion.a>
+
                 <motion.a
-                  href="#corporate-account"
+                  href="#story"
                   onClick={(e) => {
-                    scrollTo(e, "corporate-account");
+                    scrollTo(e, "story", setActiveSection);
                     setMobileMenuOpen(false);
                   }}
                   className={`transition-colors ${
-                    activeSection === "corporate-account"
+                    activeSection === "story"
                       ? `${activeNavColor} font-semibold`
                       : `${textColorMuted} ${textColorMutedHover}`
                   }`}
                 >
-                  Corporate Account
-                </motion.a>
-                <motion.a
-                  href="#fleet"
-                  onClick={(e) => {
-                    scrollTo(e, "fleet");
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`transition-colors ${
-                    activeSection === "fleet"
-                      ? `${activeNavColor} font-semibold`
-                      : `${textColorMuted} ${textColorMutedHover}`
-                  }`}
-                >
-                  Fleet
+                  Our Story
                 </motion.a>
 
                 <motion.div className="relative">
@@ -457,6 +549,14 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                                       key={link.label}
                                       href={link.href}
                                       className={`block text-sm transition-colors ${dropdownText}`}
+                                      onClick={(e) => {
+                                        scrollTo(
+                                          e,
+                                          link.href.substring(1),
+                                          setActiveSection,
+                                        );
+                                        setMobileMenuOpen(false);
+                                      }}
                                     >
                                       {link.label}
                                     </motion.a>
@@ -472,23 +572,54 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                 </motion.div>
 
                 <motion.a
-                  href="#contact"
+                  href="#review-card"
                   onClick={(e) => {
-                    scrollTo(e, "contact");
+                    scrollTo(e, "review-card", setActiveSection);
                     setMobileMenuOpen(false);
                   }}
                   className={`transition-colors ${
-                    activeSection === "contact"
+                    activeSection === "review-card"
                       ? `${activeNavColor} font-semibold`
                       : `${textColorMuted} ${textColorMutedHover}`
                   }`}
                 >
-                  Contact
+                  Reviews
                 </motion.a>
+
+                <motion.a
+                  href="#benefits"
+                  onClick={(e) => {
+                    scrollTo(e, "benefits", setActiveSection);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`transition-colors ${
+                    activeSection === "benefits"
+                      ? `${activeNavColor} font-semibold`
+                      : `${textColorMuted} ${textColorMutedHover}`
+                  }`}
+                >
+                  About
+                </motion.a>
+
+                <motion.a
+                  href="#areaWeCover"
+                  onClick={(e) => {
+                    scrollTo(e, "areaWeCover", setActiveSection);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`transition-colors ${
+                    activeSection === "areaWeCover"
+                      ? `${activeNavColor} font-semibold`
+                      : `${textColorMuted} ${textColorMutedHover}`
+                  }`}
+                >
+                  Coverage
+                </motion.a>
+
                 <motion.a
                   href="#faq"
                   onClick={(e) => {
-                    scrollTo(e, "faq");
+                    scrollTo(e, "faq", setActiveSection);
                     setMobileMenuOpen(false);
                   }}
                   className={`transition-colors ${

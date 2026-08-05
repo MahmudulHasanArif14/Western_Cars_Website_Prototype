@@ -84,7 +84,10 @@ export default function AreaWeCover() {
 
   if (!mounted) {
     return (
-      <section className={`relative overflow-hidden ${sectionBg} py-16`}>
+      <section
+        className={`relative overflow-hidden ${sectionBg} py-16`}
+        id="areaWeCover"
+      >
         <div className="min-h-[600px]" />
       </section>
     );
@@ -92,11 +95,13 @@ export default function AreaWeCover() {
 
   return (
     <motion.section
+      id="areaWeCover"
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
       viewport={{ once: true }}
       transition={{ duration: 0.8 }}
       className={`relative overflow-hidden py-16 md:py-24 ${sectionBg}`}
+      
     >
       {/* Background Glows */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
