@@ -93,7 +93,7 @@ export default function Hero({
             preload="auto"
             onLoadedData={handleVideoLoaded}
             onError={handleVideoError}
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000  ${
               isVideoLoaded ? "opacity-100" : "opacity-0"
             }`}
           >
@@ -119,10 +119,28 @@ export default function Hero({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-white/10 backdrop-blur-md md:mb-8"
+              className="inline-flex 
+              items-center
+               gap-2 
+               mt-18 
+               [@media(width:375px)_and_(height:667px)]:mt-50
+                [@media(width:360px)_and_(height:740px)]:mt-50  
+                [@media(width:344px)_and_(height:882px)]:mt-40 
+                mb-2 
+                sm:mt-5       
+                px-4 
+                py-2
+                  rounded-full 
+                  border
+                   border-white/15 
+                   bg-white/10 backdrop-blur-md 
+                   md:mb-8
+                   
+                   
+                   "
             >
               <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-              <span className="text-xs tracking-[0.25em] uppercase text-white/90 font-semibold">
+              <span className="text-xs tracking-[0.25em] uppercase text-white/90 font-semibold ">
                 Private Taxi Hire
               </span>
             </motion.div>
@@ -140,7 +158,7 @@ export default function Hero({
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
-                className="text-5xl sm:text-7xl md:text-8xl lg:text-[9rem] font-medium text-white -mt-5 md:-mt-8"
+                className="text-5xl sm:text-7xl md:text-8xl lg:text-[9rem] font-medium text-white -mt-5 md:-mt-8 [@media(width:375px)_and_(height:667px)]:mb-1"
               >
                 Accessible.
               </motion.h1>
@@ -150,7 +168,7 @@ export default function Hero({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="mt-14 md:mt-8 text-lg md:text-xl text-white/75 max-w-2xl mx-auto leading-relaxed"
+              className="mt-7 [@media(width:375px)_and_(height:667px)]:mt-3 md:mt-8 text-lg md:text-xl text-white/75 max-w-2xl mx-auto leading-relaxed"
             >
               Luxury airport transfers and executive private travel designed for
               comfort, elegance, and seamless journeys.
@@ -160,7 +178,7 @@ export default function Hero({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="mt-10 flex flex-wrap items-center justify-center gap-4"
+              className="mt-10 [@media(width:375px)_and_(height:667px)]:mt-3  flex flex-wrap items-center justify-center gap-4"
             >
               <motion.button
                 whileHover={{ scale: 1.05 }}

@@ -553,7 +553,7 @@ function ReviewCard({
 
   return (
     <motion.section
-      className={`flex h-[280px] w-full flex-col justify-between rounded-2xl p-6 ${shadow} ${cardBg} transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_70px_rgba(0,0,0,0.15)] dark:hover:shadow-[0_30px_70px_rgba(0,0,0,0.6)]`}
+      className={`flex h-70 w-full flex-col justify-between rounded-2xl p-6 ${shadow} ${cardBg} transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_70px_rgba(0,0,0,0.15)] dark:hover:shadow-[0_30px_70px_rgba(0,0,0,0.6)]`}
 
       id="review-card"
     

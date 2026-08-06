@@ -180,37 +180,97 @@ export default function Header({ setBookingOpen }: HeaderProps) {
 
   const isDark = mounted && resolvedTheme === "dark";
 
-  const textColor = "text-white";
-  const textColorHover = "hover:text-white";
-  const textColorMuted = "text-white/90";
-  const textColorMutedHover = "hover:text-white";
+  const isHome = activeSection === "home";
 
-  const mobileMenuBg = isDark
-    ? "bg-[#1a1f2f]/95 backdrop-blur-xl border border-white/10"
-    : "bg-white/95 backdrop-blur-xl border border-gray-200/50";
+  // --- Colour classes based on section ---
+  const headerBg = isHome
+    ? "bg-transparent"
+    : isDark
+      ? "bg-[#1a1f2f]/50 backdrop-blur-lg border-b border-white/10"
+      : "bg-[#FFF7EB]/50 backdrop-blur-lg border-b border-gray-200/50 shadow-sm";
 
-  const dropdownBg = isDark
-    ? "bg-[#1a1f2f]/95 backdrop-blur-xl border border-white/10"
-    : "bg-white/95 backdrop-blur-xl border border-gray-200/50";
 
-  const dropdownText = isDark
+ 
+  
+  // service Section dropdown colors
+  const textColor = isHome ? "text-white" : isDark? "text-white": "text-black";
+
+
+
+  const textColorHover = isDark ? "hover:text-white" : "hover:text-black";
+
+
+
+
+  const textColorMuted = isHome ? "text-white/90" :isDark?"text-white/90": "text-black/90";
+
+
+
+  const textColorMutedHover =  "hover:text-grey-900";
+  
+  const activeNavColor = isHome ? "text-white" : isDark? "text-white": "text-black";
+  const activeIndicatorColor = isDark ? "bg-orange-400" : "bg-orange-500";
+
+
+   const mobileMenuBg = isHome
+     ? isDark
+       ? "bg-[#1a1f2f]/95 backdrop-blur-xl border border-white/10"
+       : "bg-black/20 backdrop-blur-xl border border-gray-200/50"
+     : isDark
+       ? "bg-[#1a1f2f]/95 backdrop-blur-xl border border-white/10"
+       : "bg-black/20 backdrop-blur-xl border border-gray-200/50";
+
+ 
+
+
+  const dropdownBg = isHome
+    ? isDark
+      ? "bg-[#1a1f2f]/95 backdrop-blur-xl border border-white/10"
+      : "bg-white/95 backdrop-blur-xl border border-gray-200/50"
+    : isDark
+      ? "bg-[#1a1f2f]/95 backdrop-blur-xl border border-white/10"
+      : "bg-white/95 backdrop-blur-xl border border-gray-200/50";
+  
+
+const dropdownText = isHome
+  ? isDark
+    ? "text-white/90 hover:text-blue-400"
+    : "text-gray-600 hover:text-orange-500"
+  : isDark
     ? "text-white/90 hover:text-blue-400"
     : "text-gray-600 hover:text-orange-500";
-  const dropdownTitle = isDark ? "text-white" : "text-gray-800";
+  
+
+
+
+
+
+
+  
+const dropdownTitle = isHome
+  ? isDark
+    ? "text-white"
+    : "text-gray-800"
+  : isDark
+    ? "text-white"
+      : "text-gray-800";
+  
+  
 
   const buttonBg = "bg-orange-500 hover:bg-orange-600";
   const mobileButtonBg = "bg-orange-500 hover:bg-orange-600 text-white";
-  const themeToggleBg = "bg-white/10 hover:bg-white/20 border border-white/20";
+const themeToggleBg = isHome
+  ? "bg-white/10 hover:bg-white/20 border border-white/20"
+  : "bg-gray-100 hover:bg-gray-200 border border-gray-300";
 
-  const activeNavColor = "text-white";
-  const activeIndicatorColor = isDark ? "bg-orange-400" : "bg-orange-500";
+
 
   return (
     <motion.header
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="fixed top-0 inset-x-0 z-50 w-full transition-all duration-300"
+      className={`fixed top-0 inset-x-0 z-50 w-full transition-all duration-300 ${headerBg}`}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between px-6 lg:px-8 py-4 lg:py-5">
         {/* Logo */}
@@ -219,7 +279,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="h-12 w-48 relative cursor-pointer shrink-0"
+          className={`h-12 w-48 relative cursor-pointer shrink-0`}
           onClick={(e) => scrollTo(e, "home", setActiveSection)}
         >
           <Image
@@ -233,7 +293,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
         </motion.a>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-8 lg:gap-10">
+        <nav className="hidden lg:flex items-center gap-8  lg:gap-10">
           <motion.a
             href="#home"
             onClick={(e) => scrollTo(e, "home", setActiveSection)}
@@ -414,7 +474,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
         </nav>
 
         {/* Right side buttons */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden lg:flex items-center gap-3">
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -426,8 +486,10 @@ export default function Header({ setBookingOpen }: HeaderProps) {
         </div>
 
         {/* Mobile Menu Button */}
-        <div className="flex items-center gap-3 md:hidden">
-          {mounted && (
+        <div className="flex items-center gap-3 lg:hidden">
+      
+      
+          {/* {mounted && (
             <button
               onClick={() => setTheme(isDark ? "light" : "dark")}
               className={`p-2 rounded-full transition-all duration-300 ${themeToggleBg}`}
@@ -439,7 +501,9 @@ export default function Header({ setBookingOpen }: HeaderProps) {
                 <Moon className="h-5 w-5 text-slate-700" />
               )}
             </button>
-          )}
+          )} */}
+
+
           <button
             onClick={() => setMobileMenuOpen((prev) => !prev)}
             className={textColor}
@@ -460,7 +524,7 @@ export default function Header({ setBookingOpen }: HeaderProps) {
             initial={{ opacity: 0, y: -15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="md:hidden px-6 pb-6"
+            className="lg:hidden px-6 pb-6"
           >
             <div className={`rounded-3xl p-6 ${mobileMenuBg}`}>
               <nav className="flex flex-col gap-5">
