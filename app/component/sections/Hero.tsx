@@ -8,14 +8,12 @@ import Header from "../layout/Header";
 import { useTheme } from "next-themes";
 
 interface HeroProps {
-  setBookingOpen: (value: boolean) => void;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   isMuted: boolean;
   setIsMuted: (value: boolean) => void;
 }
 
 export default function Hero({
-  setBookingOpen,
   videoRef,
   isMuted,
   setIsMuted,
@@ -111,7 +109,7 @@ export default function Hero({
       />
 
       <div className="relative z-20 h-full flex flex-col">
-        <Header setBookingOpen={setBookingOpen} />
+        <Header  />
 
         <main className="flex-1 flex items-center justify-center">
           <div className="max-w-6xl mx-auto px-6 text-center -mt-24">
@@ -191,7 +189,6 @@ export default function Hero({
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setBookingOpen(true)}
                 className="px-7 py-3.5 rounded-full border border-white/20 bg-linear-to-br from-[#3B82F6] to-[#2563EB] shadow-[0_10px_30px_rgba(37,99,235,0.35)] backdrop-blur-md text-white hover:shadow-lg hover:bg-white/20 transition-colors font-medium"
               >
                 Book Now
