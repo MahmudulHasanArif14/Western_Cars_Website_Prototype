@@ -7,14 +7,44 @@ import {
   Popup,
   Polyline,
   useMap,
-  useMapEvents,
 } from "react-leaflet";
-
 import L from "leaflet";
 import { useEffect, useRef, useState } from "react";
 
-// Fix Leaflet's default icon path issue in Next.js / React
+import "leaflet/dist/leaflet.css";
+
+interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
+export interface ViaCoordinate extends Coordinates {
+  id: string;
+}
+
+interface Props {
+  pickupCoords: Coordinates;
+  destinationCoords: Coordinates | null;
+  viaCoords: ViaCoordinate[];
+
+  onPickupChange: (coords: Coordinates) => void;
+  onDestinationChange: (coords: Coordinates) => void;
+  onViaChange: (id: string, coords: Coordinates) => void;
+
+  onRouteChange: (data: {
+    distanceMiles: number;
+    durationMinutes: number;
+  }) => void;
+
+  onRouteError?: (message: string | null) => void;
+}
+
+/* ==========================================================================
+   LEAFLET ICON FIX
+========================================================================== */
+
 delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
+
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -22,34 +52,19 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-interface Coordinates {
-  lat: number;
-  lng: number;
-}
+/* ==========================================================================
+   COLORS
+========================================================================== */
 
-interface Props {
-  pickupCoords: Coordinates;
-  destinationCoords: Coordinates | null;
-  viaCoords: Coordinates | null;
-
-  onPickupChange: (coords: Coordinates) => void;
-  onDestinationChange: (coords: Coordinates) => void;
-  onViaChange: (coords: Coordinates) => void;
-
-  onRouteChange: (data: {
-    distanceMiles: number;
-    durationMinutes: number;
-  }) => void;
-
-  // Called whenever a route could not be calculated, so the parent can show
-  // a friendly message instead of leaving the "Calculating route..." spinner
-  // stuck forever.
-  onRouteError?: (message: string | null) => void;
-}
+export const MARKER_COLORS = {
+  pickup: "#16803c",
+  via: "#2563eb",
+  destination: "#c62828",
+};
 
 /* ==========================================================================
-   ICONS
-   ========================================================================== */
+   MARKER ICON
+========================================================================== */
 
 const createMarkerIcon = (letter: string, color: string) => {
   return L.divIcon({
@@ -76,28 +91,21 @@ const createMarkerIcon = (letter: string, color: string) => {
     `,
     iconSize: [38, 38],
     iconAnchor: [19, 19],
+    popupAnchor: [0, -20],
   });
 };
 
-export const MARKER_COLORS = {
-  pickup: "#16803c",
-  via: "#2563eb",
-  destination: "#c62828",
-};
-
 const pickupIcon = createMarkerIcon("P", MARKER_COLORS.pickup);
-const viaIcon = createMarkerIcon("V", MARKER_COLORS.via);
+
 const destinationIcon = createMarkerIcon("D", MARKER_COLORS.destination);
 
 /* ==========================================================================
-   DISTANCE GUARD
-   ========================================================================== */
+   DISTANCE
+========================================================================== */
 
-// Straight-line (haversine) distance in km between two points. Used as a
-// cheap pre-flight check before ever calling the routing API, so we never
-// send a request that the engine is guaranteed to reject.
 function haversineKm(a: Coordinates, b: Coordinates) {
   const R = 6371;
+
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
   const dLng = ((b.lng - a.lng) * Math.PI) / 180;
 
@@ -111,15 +119,43 @@ function haversineKm(a: Coordinates, b: Coordinates) {
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-// The routing engine backing this app is configured for UK / short-hop
-// European transfers. Anything further apart than this is outside the
-// service area and will be rejected by the API with a distance error, so we
-// catch it client-side and explain it in plain language instead.
 const MAX_LEG_DISTANCE_KM = 900;
 
 /* ==========================================================================
+   MAP RESIZE CONTROLLER
+
+   This fixes the common Leaflet problem where the map is inside a
+   fixed/animated/container element and dragging does not behave correctly.
+========================================================================== */
+
+function MapResizeController() {
+  const map = useMap();
+
+  useEffect(() => {
+    const resizeMap = () => {
+      map.invalidateSize();
+    };
+
+    const timer1 = window.setTimeout(resizeMap, 100);
+    const timer2 = window.setTimeout(resizeMap, 500);
+    const timer3 = window.setTimeout(resizeMap, 1000);
+
+    window.addEventListener("resize", resizeMap);
+
+    return () => {
+      window.clearTimeout(timer1);
+      window.clearTimeout(timer2);
+      window.clearTimeout(timer3);
+      window.removeEventListener("resize", resizeMap);
+    };
+  }, [map]);
+
+  return null;
+}
+
+/* ==========================================================================
    ROUTE CONTROLLER
-   ========================================================================== */
+========================================================================== */
 
 function RouteController({
   pickupCoords,
@@ -130,16 +166,17 @@ function RouteController({
 }: {
   pickupCoords: Coordinates;
   destinationCoords: Coordinates | null;
-  viaCoords: Coordinates | null;
+  viaCoords: ViaCoordinate[];
+
   onRouteChange: Props["onRouteChange"];
   onRouteError?: Props["onRouteError"];
 }) {
   const map = useMap();
+
   const [route, setRoute] = useState<[number, number][]>([]);
+
   const requestId = useRef(0);
 
-  // Keep callbacks up to date without putting them into the main effect's
-  // dependency array (they're recreated every render in the parent).
   const onRouteChangeRef = useRef(onRouteChange);
   const onRouteErrorRef = useRef(onRouteError);
 
@@ -149,26 +186,37 @@ function RouteController({
   }, [onRouteChange, onRouteError]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const calculateRoute = async () => {
       onRouteErrorRef.current?.(null);
 
-      // Guard: don't calculate a route if there's no destination yet.
       if (!destinationCoords) {
         setRoute([]);
-        onRouteChangeRef.current({ distanceMiles: 0, durationMinutes: 0 });
+
+        onRouteChangeRef.current({
+          distanceMiles: 0,
+          durationMinutes: 0,
+        });
+
         return;
       }
 
-      // Guard: reject legs that are obviously outside the service area
-      // before ever calling the API. This is what previously surfaced as
-      // "approximated route distance must not be greater than 6000000.0
-      // meters" from ORS — now caught client-side with a clear message.
-      const legs: [Coordinates, Coordinates][] = viaCoords
-        ? [
-            [pickupCoords, viaCoords],
-            [viaCoords, destinationCoords],
-          ]
-        : [[pickupCoords, destinationCoords]];
+      const validVias = viaCoords.filter(
+        (via) => Number.isFinite(via.lat) && Number.isFinite(via.lng),
+      );
+
+      const points: Coordinates[] = [
+        pickupCoords,
+        ...validVias,
+        destinationCoords,
+      ];
+
+      const legs: [Coordinates, Coordinates][] = [];
+
+      for (let i = 0; i < points.length - 1; i++) {
+        legs.push([points[i], points[i + 1]]);
+      }
 
       const tooFar = legs.some(
         ([from, to]) => haversineKm(from, to) > MAX_LEG_DISTANCE_KM,
@@ -176,10 +224,16 @@ function RouteController({
 
       if (tooFar) {
         setRoute([]);
-        onRouteChangeRef.current({ distanceMiles: 0, durationMinutes: 0 });
+
+        onRouteChangeRef.current({
+          distanceMiles: 0,
+          durationMinutes: 0,
+        });
+
         onRouteErrorRef.current?.(
           "That destination looks to be outside our service area. Please check the pickup and destination addresses.",
         );
+
         return;
       }
 
@@ -187,32 +241,30 @@ function RouteController({
 
       if (!apiKey) {
         console.error("NEXT_PUBLIC_ORS_API_KEY is missing.");
+
         onRouteErrorRef.current?.(
           "Route pricing is temporarily unavailable. Please try again shortly.",
         );
+
         return;
       }
 
       const currentRequest = ++requestId.current;
 
       try {
-        const coordinates: number[][] = [[pickupCoords.lng, pickupCoords.lat]];
-
-        if (viaCoords) {
-          coordinates.push([viaCoords.lng, viaCoords.lat]);
-        }
-
-        coordinates.push([destinationCoords.lng, destinationCoords.lat]);
+        const coordinates = points.map((point) => [point.lng, point.lat]);
 
         const response = await fetch(
           "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
           {
             method: "POST",
+
             headers: {
               Authorization: apiKey,
               "Content-Type": "application/json",
               Accept: "application/json, application/geo+json",
             },
+
             body: JSON.stringify({
               coordinates,
               instructions: false,
@@ -221,16 +273,18 @@ function RouteController({
           },
         );
 
-        if (currentRequest !== requestId.current) {
+        if (cancelled || currentRequest !== requestId.current) {
           return;
         }
 
         if (!response.ok) {
           const errorBody = await response.text();
+
           let friendly = "We couldn't calculate a route for those addresses.";
 
           try {
             const parsed = JSON.parse(errorBody);
+
             const code = parsed?.error?.code;
 
             if (code === 2004 || code === 2010) {
@@ -238,20 +292,32 @@ function RouteController({
                 "That destination looks to be outside our service area. Please check the pickup and destination addresses.";
             } else if (code === 2099 || response.status === 404) {
               friendly =
-                "We couldn't find a drivable route between those two points.";
+                "We couldn't find a drivable route between those points.";
             }
           } catch {
-            // Body wasn't JSON — keep the generic message.
+            // Keep generic message.
           }
 
-          console.error(`ORS route error ${response.status}: ${errorBody}`);
+          console.error(`ORS route error ${response.status}:`, errorBody);
+
           setRoute([]);
-          onRouteChangeRef.current({ distanceMiles: 0, durationMinutes: 0 });
+
+          onRouteChangeRef.current({
+            distanceMiles: 0,
+            durationMinutes: 0,
+          });
+
           onRouteErrorRef.current?.(friendly);
+
           return;
         }
 
         const data = await response.json();
+
+        if (cancelled || currentRequest !== requestId.current) {
+          return;
+        }
+
         const feature = data.features?.[0];
 
         if (!feature) {
@@ -267,30 +333,40 @@ function RouteController({
         setRoute(leafletRoute);
 
         const summary = feature.properties?.summary;
-        const distanceMeters = summary?.distance || 0;
-        const durationSeconds = summary?.duration || 0;
+
+        const distanceMeters = Number(summary?.distance) || 0;
+
+        const durationSeconds = Number(summary?.duration) || 0;
 
         onRouteChangeRef.current({
           distanceMiles: distanceMeters / 1609.344,
+
           durationMinutes: durationSeconds / 60,
         });
 
         if (leafletRoute.length > 0) {
           const bounds = L.latLngBounds(leafletRoute);
+
           map.fitBounds(bounds, {
             paddingTopLeft: [30, 100],
             paddingBottomRight: [30, 100],
+            maxZoom: 15,
           });
         }
       } catch (error) {
-        if (currentRequest !== requestId.current) {
+        if (cancelled || currentRequest !== requestId.current) {
           return;
         }
 
         console.error("OpenRouteService route error:", error);
 
         setRoute([]);
-        onRouteChangeRef.current({ distanceMiles: 0, durationMinutes: 0 });
+
+        onRouteChangeRef.current({
+          distanceMiles: 0,
+          durationMinutes: 0,
+        });
+
         onRouteErrorRef.current?.(
           "We couldn't calculate a route right now. Please try again.",
         );
@@ -298,45 +374,40 @@ function RouteController({
     };
 
     calculateRoute();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     pickupCoords.lat,
     pickupCoords.lng,
     destinationCoords?.lat,
     destinationCoords?.lng,
-    viaCoords?.lat,
-    viaCoords?.lng,
+    JSON.stringify(
+      viaCoords.map((via) => ({
+        id: via.id,
+        lat: via.lat,
+        lng: via.lng,
+      })),
+    ),
     map,
   ]);
 
-  return (
-    <>
-      {route.length > 0 && (
-        <Polyline
-          positions={route}
-          pathOptions={{
-            color: "#1e3a5f",
-            weight: 6,
-            opacity: 0.9,
-          }}
-        />
-      )}
-    </>
-  );
+  return route.length > 0 ? (
+    <Polyline
+      positions={route}
+      pathOptions={{
+        color: "#1e3a5f",
+        weight: 6,
+        opacity: 0.9,
+      }}
+    />
+  ) : null;
 }
 
 /* ==========================================================================
-   MAP COMPONENT
-   ========================================================================== */
-
-function MapMarkerController() {
-  useMapEvents({
-    click() {
-      // Reserved for future "select location on map".
-    },
-  });
-
-  return null;
-}
+   BOOKING MAP
+========================================================================== */
 
 export default function BookingMap({
   pickupCoords,
@@ -352,25 +423,47 @@ export default function BookingMap({
     <MapContainer
       center={[pickupCoords.lat, pickupCoords.lng]}
       zoom={13}
-      scrollWheelZoom
-      zoomControl
-      attributionControl
+      scrollWheelZoom={true}
+      dragging={true}
+      touchZoom={true}
+      doubleClickZoom={true}
+      boxZoom={true}
+      keyboard={true}
+      zoomControl={true}
+      attributionControl={true}
       className="w-full h-full"
+      style={{
+        width: "100%",
+        height: "100%",
+        minHeight: "100vh",
+        zIndex: 0,
+      }}
     >
       <TileLayer
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
 
-      {/* PICKUP — always has coordinates, safe to render unconditionally */}
+      <MapResizeController />
+
+      {/* ================================================================
+          PICKUP
+      ================================================================ */}
+
       <Marker
         position={[pickupCoords.lat, pickupCoords.lng]}
         icon={pickupIcon}
-        draggable
+        draggable={true}
         eventHandlers={{
           dragend: (event) => {
-            const position = (event.target as L.Marker).getLatLng();
-            onPickupChange({ lat: position.lat, lng: position.lng });
+            const marker = event.target as L.Marker;
+
+            const position = marker.getLatLng();
+
+            onPickupChange({
+              lat: position.lat,
+              lng: position.lng,
+            });
           },
         }}
       >
@@ -379,37 +472,58 @@ export default function BookingMap({
         </Popup>
       </Marker>
 
-      {/* VIA — only rendered once real coordinates exist */}
-      {viaCoords && (
-        <Marker
-          position={[viaCoords.lat, viaCoords.lng]}
-          icon={viaIcon}
-          draggable
-          eventHandlers={{
-            dragend: (event) => {
-              const position = (event.target as L.Marker).getLatLng();
-              onViaChange({ lat: position.lat, lng: position.lng });
-            },
-          }}
-        >
-          <Popup>
-            <strong>Via stop</strong>
-          </Popup>
-        </Marker>
-      )}
+      {/* ================================================================
+          VIA STOPS
+      ================================================================ */}
 
-      {/* DESTINATION — only rendered once real coordinates exist. This is
-          the guard that was missing when the null-reference crash occurred:
-          destinationCoords must be checked here, not assumed non-null. */}
+      {viaCoords.map((via, index) => {
+        const viaIcon = createMarkerIcon(String(index + 1), MARKER_COLORS.via);
+
+        return (
+          <Marker
+            key={via.id}
+            position={[via.lat, via.lng]}
+            icon={viaIcon}
+            draggable={true}
+            eventHandlers={{
+              dragend: (event) => {
+                const marker = event.target as L.Marker;
+
+                const position = marker.getLatLng();
+
+                onViaChange(via.id, {
+                  lat: position.lat,
+                  lng: position.lng,
+                });
+              },
+            }}
+          >
+            <Popup>
+              <strong>Via stop {index + 1}</strong>
+            </Popup>
+          </Marker>
+        );
+      })}
+
+      {/* ================================================================
+          DESTINATION
+      ================================================================ */}
+
       {destinationCoords && (
         <Marker
           position={[destinationCoords.lat, destinationCoords.lng]}
           icon={destinationIcon}
-          draggable
+          draggable={true}
           eventHandlers={{
             dragend: (event) => {
-              const position = (event.target as L.Marker).getLatLng();
-              onDestinationChange({ lat: position.lat, lng: position.lng });
+              const marker = event.target as L.Marker;
+
+              const position = marker.getLatLng();
+
+              onDestinationChange({
+                lat: position.lat,
+                lng: position.lng,
+              });
             },
           }}
         >
@@ -419,6 +533,10 @@ export default function BookingMap({
         </Marker>
       )}
 
+      {/* ================================================================
+          ROUTE
+      ================================================================ */}
+
       <RouteController
         pickupCoords={pickupCoords}
         destinationCoords={destinationCoords}
@@ -426,8 +544,6 @@ export default function BookingMap({
         onRouteChange={onRouteChange}
         onRouteError={onRouteError}
       />
-
-      <MapMarkerController />
     </MapContainer>
   );
 }

@@ -6,7 +6,9 @@ import { Menu, X, ChevronDown, Sun, Moon } from "lucide-react";
 import Image from "next/image";
 import { getLenis } from "@/lib/lenis";
 import { useTheme } from "next-themes";
-
+interface HeaderProps {
+  background?: string;
+}
 
 
 const servicesMenu = [
@@ -86,7 +88,9 @@ const scrollTo = (
   attemptScroll();
 };
 
-export default function Header() {
+export default function Header({ background }: HeaderProps) {
+
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("home");
@@ -188,6 +192,7 @@ export default function Header() {
       : "bg-[#FFF7EB]/50 backdrop-blur-lg border-b border-gray-200/50 shadow-sm";
 
 
+  const backgroundColor = background ? background : headerBg;
  
   
   // service Section dropdown colors
@@ -268,7 +273,9 @@ const themeToggleBg = isHome
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className={`fixed top-0 inset-x-0 z-50 w-full transition-all duration-300 ${headerBg}`}
+      className={`fixed top-0 inset-x-0 z-50 w-full transition-all duration-300 ${
+        background || headerBg
+      }  `}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between px-6 lg:px-8 py-4 lg:py-5">
         {/* Logo */}
@@ -484,8 +491,6 @@ const themeToggleBg = isHome
 
         {/* Mobile Menu Button */}
         <div className="flex items-center gap-3 lg:hidden">
-      
-      
           {/* {mounted && (
             <button
               onClick={() => setTheme(isDark ? "light" : "dark")}
@@ -499,7 +504,6 @@ const themeToggleBg = isHome
               )}
             </button>
           )} */}
-
 
           <button
             onClick={() => setMobileMenuOpen((prev) => !prev)}

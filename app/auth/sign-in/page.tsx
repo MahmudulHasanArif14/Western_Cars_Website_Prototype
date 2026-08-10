@@ -69,9 +69,9 @@ export default function LoginPage() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="relative w-full max-w-[1100px] mx-4 z-10 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-275 mx-4 z-10 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl overflow-hidden"
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 min-h-[550px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 min-h-137.5">
           {/* LEFT SIDE: Login Form */}
           <motion.div
             variants={containerVariants}
