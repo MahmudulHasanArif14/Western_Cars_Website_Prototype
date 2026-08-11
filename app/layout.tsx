@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "next-themes";
+import Script from "next/script";
 import Cursor from "./component/Cursor";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -29,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
         <link
           rel="stylesheet"

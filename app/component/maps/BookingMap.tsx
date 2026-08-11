@@ -96,7 +96,6 @@ const createMarkerIcon = (letter: string, color: string) => {
 };
 
 const pickupIcon = createMarkerIcon("P", MARKER_COLORS.pickup);
-
 const destinationIcon = createMarkerIcon("D", MARKER_COLORS.destination);
 
 /* ==========================================================================
@@ -123,9 +122,6 @@ const MAX_LEG_DISTANCE_KM = 900;
 
 /* ==========================================================================
    MAP RESIZE CONTROLLER
-
-   This fixes the common Leaflet problem where the map is inside a
-   fixed/animated/container element and dragging does not behave correctly.
 ========================================================================== */
 
 function MapResizeController() {
@@ -237,68 +233,40 @@ function RouteController({
         return;
       }
 
-      const apiKey = process.env.NEXT_PUBLIC_ORS_API_KEY;
-
-      if (!apiKey) {
-        console.error("NEXT_PUBLIC_ORS_API_KEY is missing.");
-
-        onRouteErrorRef.current?.(
-          "Route pricing is temporarily unavailable. Please try again shortly.",
-        );
-
-        return;
-      }
-
       const currentRequest = ++requestId.current;
 
       try {
         const coordinates = points.map((point) => [point.lng, point.lat]);
 
-        const response = await fetch(
-          "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
-          {
-            method: "POST",
-
-            headers: {
-              Authorization: apiKey,
-              "Content-Type": "application/json",
-              Accept: "application/json, application/geo+json",
-            },
-
-            body: JSON.stringify({
-              coordinates,
-              instructions: false,
-              preference: "recommended",
-            }),
+        /*
+         * IMPORTANT:
+         *
+         * Do NOT call OpenRouteService directly from the browser.
+         *
+         * The browser now calls our own Next.js Route Handler.
+         */
+        const response = await fetch("/api/maps/route", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        );
+          body: JSON.stringify({
+            coordinates,
+          }),
+        });
 
         if (cancelled || currentRequest !== requestId.current) {
           return;
         }
 
         if (!response.ok) {
-          const errorBody = await response.text();
+          const errorData = await response.json().catch(() => null);
 
-          let friendly = "We couldn't calculate a route for those addresses.";
+          const friendly =
+            errorData?.message ||
+            "We couldn't calculate a route for those addresses.";
 
-          try {
-            const parsed = JSON.parse(errorBody);
-
-            const code = parsed?.error?.code;
-
-            if (code === 2004 || code === 2010) {
-              friendly =
-                "That destination looks to be outside our service area. Please check the pickup and destination addresses.";
-            } else if (code === 2099 || response.status === 404) {
-              friendly =
-                "We couldn't find a drivable route between those points.";
-            }
-          } catch {
-            // Keep generic message.
-          }
-
-          console.error(`ORS route error ${response.status}:`, errorBody);
+          console.error("Route API error:", response.status);
 
           setRoute([]);
 
@@ -358,7 +326,7 @@ function RouteController({
           return;
         }
 
-        console.error("OpenRouteService route error:", error);
+        console.error("Route calculation error:", error);
 
         setRoute([]);
 
@@ -383,13 +351,7 @@ function RouteController({
     pickupCoords.lng,
     destinationCoords?.lat,
     destinationCoords?.lng,
-    JSON.stringify(
-      viaCoords.map((via) => ({
-        id: via.id,
-        lat: via.lat,
-        lng: via.lng,
-      })),
-    ),
+    viaCoords,
     map,
   ]);
 
@@ -446,9 +408,7 @@ export default function BookingMap({
 
       <MapResizeController />
 
-      {/* ================================================================
-          PICKUP
-      ================================================================ */}
+      {/* PICKUP */}
 
       <Marker
         position={[pickupCoords.lat, pickupCoords.lng]}
@@ -472,9 +432,7 @@ export default function BookingMap({
         </Popup>
       </Marker>
 
-      {/* ================================================================
-          VIA STOPS
-      ================================================================ */}
+      {/* VIA STOPS */}
 
       {viaCoords.map((via, index) => {
         const viaIcon = createMarkerIcon(String(index + 1), MARKER_COLORS.via);
@@ -505,9 +463,7 @@ export default function BookingMap({
         );
       })}
 
-      {/* ================================================================
-          DESTINATION
-      ================================================================ */}
+      {/* DESTINATION */}
 
       {destinationCoords && (
         <Marker
@@ -533,9 +489,7 @@ export default function BookingMap({
         </Marker>
       )}
 
-      {/* ================================================================
-          ROUTE
-      ================================================================ */}
+      {/* ROUTE */}
 
       <RouteController
         pickupCoords={pickupCoords}
