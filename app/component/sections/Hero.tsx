@@ -1,11 +1,11 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import Header from "../layout/Header";
 import { useTheme } from "next-themes";
+import { useRouter } from "next/navigation";
 
 interface HeroProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -52,6 +52,8 @@ export default function Hero({
     setIsVideoError(true);
     console.warn("Video failed to load, using fallback gradient");
   };
+
+  const router = useRouter();
 
   // Use suppressHydrationWarning on elements that might differ
   return (
@@ -109,7 +111,7 @@ export default function Hero({
       />
 
       <div className="relative z-20 h-full flex flex-col">
-        <Header  />
+        <Header />
 
         <main className="flex-1 flex items-center justify-center">
           <div className="max-w-6xl mx-auto px-6 text-center -mt-24">
@@ -190,6 +192,7 @@ export default function Hero({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="px-7 py-3.5 rounded-full border border-white/20 bg-linear-to-br from-[#3B82F6] to-[#2563EB] shadow-[0_10px_30px_rgba(37,99,235,0.35)] backdrop-blur-md text-white hover:shadow-lg hover:bg-white/20 transition-colors font-medium"
+                onClick={() => router.push("/booking")}
               >
                 Book Now
               </motion.button>
