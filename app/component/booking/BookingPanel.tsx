@@ -3,7 +3,7 @@
 import Form from "next/form";
 
 import { AnimatePresence, motion } from "framer-motion";
-import Lenis from "@studio-freight/lenis";
+import Lenis from "lenis";
 import { isValidPhoneNumber } from "libphonenumber-js";
 import { useRouter } from "next/navigation";
 import {
