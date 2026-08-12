@@ -139,11 +139,11 @@ export default function AutocompleteInput({
             id: item.properties?.id,
           };
         })
-        .filter((item): item is Suggestion => item !== null);
+        .filter((item:Suggestion): item is Suggestion => item !== null);
 
       const seen = new Set<string>();
 
-      const results = rawResults.filter((item) => {
+      const results = rawResults.filter((item:Suggestion) => {
         const key = `${item.lat}-${item.lng}-${item.label}`;
 
         if (seen.has(key)) {
