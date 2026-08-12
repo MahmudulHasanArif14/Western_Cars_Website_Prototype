@@ -19,7 +19,7 @@ import OurServices from "./component/sections/Services";
 import AreaWeCover from "./component/sections/AreaWeCover";
 
 export default function Home() {
-  const [bookingOpen, setBookingOpen] = useState(false);
+  
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -49,7 +49,7 @@ export default function Home() {
 
       <main className="min-h-screen">
         <Hero
-          setBookingOpen={setBookingOpen}
+        
           videoRef={videoRef}
           isMuted={isMuted}
           setIsMuted={setIsMuted}
