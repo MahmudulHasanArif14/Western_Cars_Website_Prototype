@@ -32,3 +32,9 @@ export interface Via {
   lat: number | null;
   lng: number | null;
 }
+
+
+export interface CountryCodeSelectProps {
+  value: string;
+  onChange: (code: string) => void;
+}

@@ -185,10 +185,13 @@ function RouteController({
     let cancelled = false;
 
     const calculateRoute = async () => {
-      onRouteErrorRef.current?.(null);
-
+      /*
+       * No destination = no route.
+       */
       if (!destinationCoords) {
         setRoute([]);
+
+        onRouteErrorRef.current?.(null);
 
         onRouteChangeRef.current({
           distanceMiles: 0,
@@ -198,16 +201,33 @@ function RouteController({
         return;
       }
 
+      /*
+       * Only use completed via stops.
+       */
       const validVias = viaCoords.filter(
         (via) => Number.isFinite(via.lat) && Number.isFinite(via.lng),
       );
 
+      /*
+       * Build:
+       *
+       * Pickup
+       *   ↓
+       * Via 1
+       *   ↓
+       * Via 2
+       *   ↓
+       * Destination
+       */
       const points: Coordinates[] = [
         pickupCoords,
         ...validVias,
         destinationCoords,
       ];
 
+      /*
+       * Validate each leg.
+       */
       const legs: [Coordinates, Coordinates][] = [];
 
       for (let i = 0; i < points.length - 1; i++) {
@@ -233,18 +253,18 @@ function RouteController({
         return;
       }
 
+      /*
+       * Create a unique request ID.
+       *
+       * If the user changes a via while a previous request
+       * is still running, the old request cannot overwrite
+       * the newer route.
+       */
       const currentRequest = ++requestId.current;
 
       try {
         const coordinates = points.map((point) => [point.lng, point.lat]);
 
-        /*
-         * IMPORTANT:
-         *
-         * Do NOT call OpenRouteService directly from the browser.
-         *
-         * The browser now calls our own Next.js Route Handler.
-         */
         const response = await fetch("/api/maps/route", {
           method: "POST",
           headers: {
@@ -266,7 +286,7 @@ function RouteController({
             errorData?.message ||
             "We couldn't calculate a route for those addresses.";
 
-          console.error("Route API error:", response.status);
+          console.error("Route API error:", response.status, errorData);
 
           setRoute([]);
 
@@ -298,20 +318,36 @@ function RouteController({
           (point: number[]) => [point[1], point[0]],
         );
 
-        setRoute(leafletRoute);
-
         const summary = feature.properties?.summary;
 
         const distanceMeters = Number(summary?.distance) || 0;
 
         const durationSeconds = Number(summary?.duration) || 0;
 
+        /*
+         * Update route first.
+         */
+        setRoute(leafletRoute);
+
+        /*
+         * Clear any previous error.
+         */
+        onRouteErrorRef.current?.(null);
+
+        /*
+         * Tell BookingPanel that calculation is finished.
+         *
+         * BookingPanel will set routeLoading(false).
+         */
         onRouteChangeRef.current({
           distanceMiles: distanceMeters / 1609.344,
 
           durationMinutes: durationSeconds / 60,
         });
 
+        /*
+         * Fit map to the complete route.
+         */
         if (leafletRoute.length > 0) {
           const bounds = L.latLngBounds(leafletRoute);
 
@@ -351,7 +387,13 @@ function RouteController({
     pickupCoords.lng,
     destinationCoords?.lat,
     destinationCoords?.lng,
-    viaCoords,
+
+    /*
+     * IMPORTANT:
+     * Recalculate when the actual via coordinates change.
+     */
+    viaCoords.map((via) => `${via.id}:${via.lat}:${via.lng}`).join("|"),
+
     map,
   ]);
 
